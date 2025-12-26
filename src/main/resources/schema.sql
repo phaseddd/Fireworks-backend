@@ -96,9 +96,9 @@ CREATE TABLE `inquiry_item` (
 -- ==========================================
 
 -- 默认管理员账号 (用户名: admin, 密码: admin123)
--- BCrypt 加密后的密码哈希值
+-- BCrypt 加密后的密码哈希值 (使用 spring-security-crypto 生成)
 INSERT INTO `admin` (`username`, `password_hash`) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iKqBQXb0B5aZ5PLK3I6dMnL5.Nh2');
+('admin', '$2a$10$YxrzbFMvUdk7ZcdxqKO22OtXN/1IwiZPz9rWy3CzFM4yAQXAS5ZdW');
 
 -- 示例商品数据 (可选，方便测试)
 INSERT INTO `product` (`name`, `price`, `category`, `description`, `stock`, `status`, `images`) VALUES
