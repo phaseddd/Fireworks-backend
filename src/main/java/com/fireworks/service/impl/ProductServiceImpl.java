@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
+    private static final String PUBLIC_PRODUCT_STATUS = "ON_SHELF";
 
     @Override
     public PageVO<ProductVO> getProductList(String status, Integer page, Integer size) {
@@ -67,6 +68,29 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size) {
+        if (page == null || page < 1) {
+            page = 1;
+        }
+        if (size == null || size < 1) {
+            size = 20;
+        }
+
+        LambdaQueryWrapper<Product> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Product::getStatus, PUBLIC_PRODUCT_STATUS);
+        queryWrapper.orderByDesc(Product::getCreatedAt);
+
+        IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
+
+        List<ProductVO> productVOList = productPage.getRecords().stream()
+                .map(ProductVO::fromEntity)
+                .collect(Collectors.toList());
+
+        log.debug("查询公开商品列表: page={}, size={}, total={}", page, size, productPage.getTotal());
+        return PageVO.of(productVOList, productPage.getTotal(), page, size);
+    }
+
+    @Override
     public ProductVO getProductById(Long id) {
         if (id == null) {
             throw new BusinessException(400, "商品ID不能为空");
@@ -74,6 +98,20 @@ public class ProductServiceImpl implements ProductService {
 
         Product product = productMapper.selectById(id);
         if (product == null) {
+            throw new BusinessException(404, "商品不存在");
+        }
+
+        return ProductVO.fromEntity(product);
+    }
+
+    @Override
+    public ProductVO getPublicProductById(Long id) {
+        if (id == null) {
+            throw new BusinessException(400, "商品ID不能为空");
+        }
+
+        Product product = productMapper.selectById(id);
+        if (product == null || !PUBLIC_PRODUCT_STATUS.equals(product.getStatus())) {
             throw new BusinessException(404, "商品不存在");
         }
 
