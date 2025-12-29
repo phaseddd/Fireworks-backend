@@ -35,9 +35,10 @@ public class ProductPublicController {
     @GetMapping
     public Result<PageVO<ProductVO>> getPublicProductList(
             @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "20") Integer size) {
-        log.debug("获取公开商品列表: page={}, size={}", page, size);
-        return Result.success(productService.getPublicProductList(page, size));
+        log.debug("获取公开商品列表: sort={}, page={}, size={}", sort, page, size);
+        return Result.success(productService.getPublicProductList(page, size, sort));
     }
 
     /**
@@ -52,4 +53,3 @@ public class ProductPublicController {
         return Result.success(productService.getPublicProductById(id));
     }
 }
-

@@ -19,6 +19,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
@@ -117,7 +118,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public PageVO<ProductVO> getProductList(String status, Integer page, Integer size) {
+    public PageVO<ProductVO> getProductList(String status, String sort, Integer page, Integer size) {
         // 参数校验和默认值
         if (page == null || page < 1) {
             page = 1;
@@ -134,8 +135,8 @@ public class ProductServiceImpl implements ProductService {
             queryWrapper.eq(Product::getStatus, status);
         }
 
-        // 按创建时间倒序
-        queryWrapper.orderByDesc(Product::getCreatedAt);
+        // 排序（默认按创建时间倒序）
+        applySort(queryWrapper, sort);
 
         // 分页查询
         IPage<Product> productPage = productMapper.selectPage(
@@ -155,7 +156,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size) {
+    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort) {
         if (page == null || page < 1) {
             page = 1;
         }
@@ -165,7 +166,7 @@ public class ProductServiceImpl implements ProductService {
 
         LambdaQueryWrapper<Product> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Product::getStatus, PUBLIC_PRODUCT_STATUS);
-        queryWrapper.orderByDesc(Product::getCreatedAt);
+        applySort(queryWrapper, sort);
 
         IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
 
@@ -175,6 +176,26 @@ public class ProductServiceImpl implements ProductService {
 
         log.debug("查询公开商品列表: page={}, size={}, total={}", page, size, productPage.getTotal());
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
+    }
+
+    private static void applySort(LambdaQueryWrapper<Product> queryWrapper, String sort) {
+        if (!StringUtils.hasText(sort)) {
+            queryWrapper.orderByDesc(Product::getCreatedAt);
+            return;
+        }
+
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        String direction = parts.length > 1 ? parts[1].trim().toLowerCase(Locale.ROOT) : "asc";
+        boolean asc = !"desc".equals(direction);
+
+        switch (field) {
+            case "updatedAt" -> queryWrapper.orderBy(true, asc, Product::getUpdatedAt);
+            case "createdAt" -> queryWrapper.orderBy(true, asc, Product::getCreatedAt);
+            case "price" -> queryWrapper.orderBy(true, asc, Product::getPrice);
+            case "id" -> queryWrapper.orderBy(true, asc, Product::getId);
+            default -> queryWrapper.orderByDesc(Product::getCreatedAt);
+        }
     }
 
     @Override

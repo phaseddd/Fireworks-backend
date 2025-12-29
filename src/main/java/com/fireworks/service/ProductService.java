@@ -31,20 +31,22 @@ public interface ProductService {
      * 获取商品列表（管理端，返回所有状态）
      *
      * @param status 商品状态筛选（可选）：ON_SHELF-上架, OFF_SHELF-下架
+     * @param sort   排序字段与方向（可选）：例如 updatedAt,desc
      * @param page   页码（从1开始）
      * @param size   每页数量
      * @return 分页商品列表
      */
-    PageVO<ProductVO> getProductList(String status, Integer page, Integer size);
+    PageVO<ProductVO> getProductList(String status, String sort, Integer page, Integer size);
 
     /**
      * 获取商品列表（客户端公开接口，仅返回上架商品）
      *
      * @param page 页码（从1开始）
      * @param size 每页数量
+     * @param sort 排序字段与方向（可选）：例如 updatedAt,desc
      * @return 分页商品列表
      */
-    PageVO<ProductVO> getPublicProductList(Integer page, Integer size);
+    PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort);
 
     /**
      * 获取商品详情

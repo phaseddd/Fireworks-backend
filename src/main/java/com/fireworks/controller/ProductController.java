@@ -46,11 +46,12 @@ public class ProductController {
     @GetMapping
     public Result<PageVO<ProductVO>> getProductList(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
 
-        log.debug("获取商品列表: status={}, page={}, size={}", status, page, size);
-        PageVO<ProductVO> pageVO = productService.getProductList(status, page, size);
+        log.debug("获取商品列表: status={}, sort={}, page={}, size={}", status, sort, page, size);
+        PageVO<ProductVO> pageVO = productService.getProductList(status, sort, page, size);
         return Result.success(pageVO);
     }
 
