@@ -1,5 +1,6 @@
 package com.fireworks.service;
 
+import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.vo.PageVO;
 import com.fireworks.vo.ProductVO;
 
@@ -7,6 +8,14 @@ import com.fireworks.vo.ProductVO;
  * 商品服务接口
  */
 public interface ProductService {
+
+    /**
+     * 创建商品
+     *
+     * @param request 创建商品请求
+     * @return 创建的商品信息
+     */
+    ProductVO createProduct(CreateProductRequest request);
 
     /**
      * 获取商品列表（管理端，返回所有状态）

@@ -1,9 +1,11 @@
 package com.fireworks.controller;
 
 import com.fireworks.common.Result;
+import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.service.ProductService;
 import com.fireworks.vo.PageVO;
 import com.fireworks.vo.ProductVO;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,19 @@ import org.springframework.web.bind.annotation.*;
 public class ProductController {
 
     private final ProductService productService;
+
+    /**
+     * 创建商品
+     *
+     * @param request 创建商品请求
+     * @return 创建的商品信息
+     */
+    @PostMapping
+    public Result<ProductVO> createProduct(@Valid @RequestBody CreateProductRequest request) {
+        log.info("创建商品: name={}", request.getName());
+        ProductVO productVO = productService.createProduct(request);
+        return Result.success("创建成功", productVO);
+    }
 
     /**
      * 获取商品列表（管理端，需要认证）

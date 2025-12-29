@@ -3,6 +3,7 @@ package com.fireworks.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.entity.Product;
 import com.fireworks.exception.BusinessException;
 import com.fireworks.mapper.ProductMapper;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +30,30 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
     private static final String PUBLIC_PRODUCT_STATUS = "ON_SHELF";
+    private static final String DEFAULT_STATUS = "ON_SHELF";
+
+    @Override
+    @Transactional
+    public ProductVO createProduct(CreateProductRequest request) {
+        // Build product entity
+        Product product = new Product();
+        product.setName(request.getName().trim());
+        product.setPrice(request.getPrice());
+        product.setCategory(request.getCategory() != null ? request.getCategory() : "OTHER");
+        product.setStock(request.getStock() != null ? request.getStock() : 0);
+        product.setDescription(request.getDescription() != null ? request.getDescription().trim() : "");
+        product.setStatus(DEFAULT_STATUS);
+        product.setImages(new ArrayList<>());
+
+        // Insert to database
+        int result = productMapper.insert(product);
+        if (result <= 0) {
+            throw new BusinessException(500, "创建商品失败");
+        }
+
+        log.info("商品创建成功: id={}, name={}", product.getId(), product.getName());
+        return ProductVO.fromEntity(product);
+    }
 
     @Override
     public PageVO<ProductVO> getProductList(String status, Integer page, Integer size) {
