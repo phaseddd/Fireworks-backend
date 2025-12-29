@@ -2,6 +2,7 @@ package com.fireworks.controller;
 
 import com.fireworks.common.Result;
 import com.fireworks.dto.CreateProductRequest;
+import com.fireworks.dto.UpdateProductRequest;
 import com.fireworks.service.ProductService;
 import com.fireworks.vo.PageVO;
 import com.fireworks.vo.ProductVO;
@@ -64,6 +65,22 @@ public class ProductController {
         log.debug("获取商品详情: id={}", id);
         ProductVO productVO = productService.getProductById(id);
         return Result.success(productVO);
+    }
+
+    /**
+     * 更新商品
+     *
+     * @param id      商品ID
+     * @param request 更新商品请求
+     * @return 更新后的商品信息
+     */
+    @PutMapping("/{id}")
+    public Result<ProductVO> updateProduct(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateProductRequest request) {
+        log.info("更新商品: id={}", id);
+        ProductVO productVO = productService.updateProduct(id, request);
+        return Result.success("更新成功", productVO);
     }
 
     /**

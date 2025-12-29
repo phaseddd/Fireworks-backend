@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fireworks.dto.CreateProductRequest;
+import com.fireworks.dto.UpdateProductRequest;
 import com.fireworks.entity.Product;
 import com.fireworks.exception.BusinessException;
 import com.fireworks.mapper.ProductMapper;
@@ -66,6 +67,52 @@ public class ProductServiceImpl implements ProductService {
         }
 
         log.info("商品创建成功: id={}, name={}", product.getId(), product.getName());
+        return ProductVO.fromEntity(product);
+    }
+
+    @Override
+    @Transactional
+    public ProductVO updateProduct(Long id, UpdateProductRequest request) {
+        if (id == null) {
+            throw new BusinessException(400, "商品ID不能为空");
+        }
+
+        // Check if product exists
+        Product product = productMapper.selectById(id);
+        if (product == null) {
+            throw new BusinessException(404, "商品不存在");
+        }
+
+        // Validate images: [main, detail, qrcode]
+        List<String> images = request.getImages();
+        if (images == null || images.size() != 3) {
+            throw new BusinessException(400, "商品图片参数不完整");
+        }
+        String mainImage = images.get(0);
+        String qrcodeImage = images.get(2);
+        if (!StringUtils.hasText(mainImage)) {
+            throw new BusinessException(400, "请上传商品外观图");
+        }
+        if (!StringUtils.hasText(qrcodeImage)) {
+            throw new BusinessException(400, "请上传燃放效果二维码图");
+        }
+
+        // Update product fields
+        product.setName(request.getName().trim());
+        product.setPrice(request.getPrice());
+        product.setCategory(request.getCategory() != null ? request.getCategory() : product.getCategory());
+        product.setStock(request.getStock() != null ? request.getStock() : product.getStock());
+        product.setDescription(request.getDescription() != null ? request.getDescription().trim() : product.getDescription());
+        product.setStatus(request.getStatus() != null ? request.getStatus() : product.getStatus());
+        product.setImages(new ArrayList<>(images));
+
+        // Update to database
+        int result = productMapper.updateById(product);
+        if (result <= 0) {
+            throw new BusinessException(500, "更新商品失败");
+        }
+
+        log.info("商品更新成功: id={}, name={}", product.getId(), product.getName());
         return ProductVO.fromEntity(product);
     }
 
