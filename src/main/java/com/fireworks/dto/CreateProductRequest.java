@@ -8,6 +8,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 创建商品请求 DTO
@@ -47,4 +48,10 @@ public class CreateProductRequest {
      * 商品描述（选填）
      */
     private String description;
+
+    /**
+     * 商品图片列表
+     * 约定顺序: [外观图(main), 细节图(detail), 二维码图(qrcode)]
+     */
+    private List<String> images;
 }

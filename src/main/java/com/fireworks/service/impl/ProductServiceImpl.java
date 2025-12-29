@@ -43,7 +43,21 @@ public class ProductServiceImpl implements ProductService {
         product.setStock(request.getStock() != null ? request.getStock() : 0);
         product.setDescription(request.getDescription() != null ? request.getDescription().trim() : "");
         product.setStatus(DEFAULT_STATUS);
-        product.setImages(new ArrayList<>());
+
+        // Images: [main, detail, qrcode]
+        List<String> images = request.getImages() != null ? request.getImages() : new ArrayList<>();
+        if (images.size() < 3) {
+            throw new BusinessException(400, "商品图片参数不完整");
+        }
+        String mainImage = images.get(0);
+        String qrcodeImage = images.get(2);
+        if (!StringUtils.hasText(mainImage)) {
+            throw new BusinessException(400, "请上传商品外观图");
+        }
+        if (!StringUtils.hasText(qrcodeImage)) {
+            throw new BusinessException(400, "请上传燃放效果二维码图");
+        }
+        product.setImages(new ArrayList<>(images));
 
         // Insert to database
         int result = productMapper.insert(product);
