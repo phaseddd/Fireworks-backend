@@ -65,4 +65,5 @@ Thumbs.db
 
 # Application
 application-local.yml
-application-prod.yml
+
+# 生产环境配置建议纳入版本管理（不写死敏感信息，敏感信息通过环境变量注入）
