@@ -47,9 +47,17 @@ public interface ProductService {
      * @param category 商品分类筛选（可选）：GIFT/FIREWORK/FIRECRACKER/COMBO/OTHER
      * @param minPrice 最低价格筛选（可选）
      * @param maxPrice 最高价格筛选（可选）
+     * @param keyword  搜索关键词（可选）：模糊匹配商品名称
      * @return 分页商品列表
      */
-    PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice);
+    PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice, String keyword);
+
+    /**
+     * 获取热门搜索关键词
+     *
+     * @return 热门关键词列表
+     */
+    java.util.List<String> getHotKeywords();
 
     /**
      * 获取商品详情

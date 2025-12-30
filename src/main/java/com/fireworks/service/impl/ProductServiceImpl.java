@@ -156,7 +156,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice) {
+    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice, String keyword) {
         if (page == null || page < 1) {
             page = 1;
         }
@@ -180,6 +180,11 @@ public class ProductServiceImpl implements ProductService {
             queryWrapper.le(Product::getPrice, maxPrice);
         }
 
+        // 关键词模糊搜索
+        if (StringUtils.hasText(keyword)) {
+            queryWrapper.like(Product::getName, keyword);
+        }
+
         applySort(queryWrapper, sort);
 
         IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
@@ -188,9 +193,15 @@ public class ProductServiceImpl implements ProductService {
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
-        log.debug("查询公开商品列表: category={}, minPrice={}, maxPrice={}, page={}, size={}, total={}",
-                category, minPrice, maxPrice, page, size, productPage.getTotal());
+        log.debug("查询公开商品列表: category={}, minPrice={}, maxPrice={}, keyword={}, page={}, size={}, total={}",
+                category, minPrice, maxPrice, keyword, page, size, productPage.getTotal());
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
+    }
+
+    @Override
+    public List<String> getHotKeywords() {
+        // 静态配置热门关键词（后续可扩展为基于搜索统计动态获取）
+        return java.util.Arrays.asList("烟花", "礼花", "鞭炮", "仙女棒", "孔明灯", "烟火", "礼品装");
     }
 
     private static void applySort(LambdaQueryWrapper<Product> queryWrapper, String sort) {
