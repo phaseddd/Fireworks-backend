@@ -41,12 +41,15 @@ public interface ProductService {
     /**
      * 获取商品列表（客户端公开接口，仅返回上架商品）
      *
-     * @param page 页码（从1开始）
-     * @param size 每页数量
-     * @param sort 排序字段与方向（可选）：例如 updatedAt,desc
+     * @param page     页码（从1开始）
+     * @param size     每页数量
+     * @param sort     排序字段与方向（可选）：例如 updatedAt,desc
+     * @param category 商品分类筛选（可选）：GIFT/FIREWORK/FIRECRACKER/COMBO/OTHER
+     * @param minPrice 最低价格筛选（可选）
+     * @param maxPrice 最高价格筛选（可选）
      * @return 分页商品列表
      */
-    PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort);
+    PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice);
 
     /**
      * 获取商品详情

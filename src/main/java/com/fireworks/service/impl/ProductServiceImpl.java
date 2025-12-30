@@ -156,7 +156,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort) {
+    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice) {
         if (page == null || page < 1) {
             page = 1;
         }
@@ -166,6 +166,20 @@ public class ProductServiceImpl implements ProductService {
 
         LambdaQueryWrapper<Product> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Product::getStatus, PUBLIC_PRODUCT_STATUS);
+
+        // 分类筛选
+        if (StringUtils.hasText(category)) {
+            queryWrapper.eq(Product::getCategory, category);
+        }
+
+        // 价格区间筛选
+        if (minPrice != null) {
+            queryWrapper.ge(Product::getPrice, minPrice);
+        }
+        if (maxPrice != null) {
+            queryWrapper.le(Product::getPrice, maxPrice);
+        }
+
         applySort(queryWrapper, sort);
 
         IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
@@ -174,7 +188,8 @@ public class ProductServiceImpl implements ProductService {
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
-        log.debug("查询公开商品列表: page={}, size={}, total={}", page, size, productPage.getTotal());
+        log.debug("查询公开商品列表: category={}, minPrice={}, maxPrice={}, page={}, size={}, total={}",
+                category, minPrice, maxPrice, page, size, productPage.getTotal());
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
     }
 

@@ -28,17 +28,25 @@ public class ProductPublicController {
     /**
      * 获取商品列表（公开）
      *
-     * @param page 页码（从1开始，默认1）
-     * @param size 每页数量（默认20）
+     * @param page     页码（从1开始，默认1）
+     * @param size     每页数量（默认20）
+     * @param sort     排序字段与方向（可选）
+     * @param category 商品分类筛选（可选）：GIFT/FIREWORK/FIRECRACKER/COMBO/OTHER
+     * @param minPrice 最低价格筛选（可选）
+     * @param maxPrice 最高价格筛选（可选）
      * @return 分页商品列表
      */
     @GetMapping
     public Result<PageVO<ProductVO>> getPublicProductList(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(required = false) String sort,
-            @RequestParam(defaultValue = "20") Integer size) {
-        log.debug("获取公开商品列表: sort={}, page={}, size={}", sort, page, size);
-        return Result.success(productService.getPublicProductList(page, size, sort));
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) Integer minPrice,
+            @RequestParam(required = false) Integer maxPrice) {
+        log.debug("获取公开商品列表: category={}, minPrice={}, maxPrice={}, sort={}, page={}, size={}",
+                category, minPrice, maxPrice, sort, page, size);
+        return Result.success(productService.getPublicProductList(page, size, sort, category, minPrice, maxPrice));
     }
 
     /**
