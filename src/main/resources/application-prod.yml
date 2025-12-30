@@ -20,7 +20,7 @@ spring:
 
 # JWT 密钥 (生产环境从环境变量读取)
 jwt:
-  secret: ${JWT_SECRET:fireworks-prod-change-this-in-cloud-console}
+  secret: ${JWT_SECRET}
 
 # 日志级别 (生产环境精简日志)
 logging:
@@ -40,4 +40,4 @@ app:
     type: cloud
     cloud:
       # 微信云托管环境 ID (从环境变量读取)
-      env-id: ${WX_CLOUD_ENV_ID:}
+      env-id: ${WX_CLOUD_ENV_ID}
