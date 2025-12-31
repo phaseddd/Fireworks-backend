@@ -3,7 +3,7 @@
 
 spring:
   profiles:
-    active: prod  # 切换环境: local(本地开发) / prod(云端生产)
+    active: local  # 切换环境: local(本地开发) / prod(云端生产)
 
   application:
     name: fireworks-backend
