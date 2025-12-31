@@ -60,6 +60,11 @@ public class ProductVO {
     private List<String> images;
 
     /**
+     * 燃放效果视频URL
+     */
+    private String videoUrl;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createdAt;
@@ -85,6 +90,7 @@ public class ProductVO {
                 .stock(product.getStock())
                 .status(product.getStatus())
                 .images(product.getImages())
+                .videoUrl(product.getVideoUrl())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .build();

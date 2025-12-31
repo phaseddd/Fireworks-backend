@@ -58,6 +58,11 @@ public class Product {
     private List<String> images;
 
     /**
+     * 燃放效果视频URL
+     */
+    private String videoUrl;
+
+    /**
      * 逻辑删除标记
      */
     @TableLogic

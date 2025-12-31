@@ -144,7 +144,7 @@ public class ProductServiceImpl implements ProductService {
                 queryWrapper
         );
 
-        // 转换为 VO
+        // 转换为VO
         List<ProductVO> productVOList = productPage.getRecords().stream()
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
@@ -271,5 +271,27 @@ public class ProductServiceImpl implements ProductService {
         } else {
             throw new BusinessException(500, "删除失败");
         }
+    }
+
+    @Override
+    @Transactional
+    public ProductVO updateVideoUrl(Long id, String videoUrl) {
+        if (id == null) {
+            throw new BusinessException(400, "商品ID不能为空");
+        }
+
+        Product product = productMapper.selectById(id);
+        if (product == null) {
+            throw new BusinessException(404, "商品不存在");
+        }
+
+        product.setVideoUrl(videoUrl);
+        int result = productMapper.updateById(product);
+        if (result <= 0) {
+            throw new BusinessException(500, "更新视频URL失败");
+        }
+
+        log.info("商品视频URL更新成功: id={}, videoUrl={}", id, videoUrl);
+        return ProductVO.fromEntity(product);
     }
 }

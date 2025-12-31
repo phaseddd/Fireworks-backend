@@ -81,4 +81,13 @@ public interface ProductService {
      * @param id 商品ID
      */
     void deleteProduct(Long id);
+
+    /**
+     * 更新商品视频URL
+     *
+     * @param id       商品ID
+     * @param videoUrl 视频URL
+     * @return 更新后的商品信息
+     */
+    ProductVO updateVideoUrl(Long id, String videoUrl);
 }

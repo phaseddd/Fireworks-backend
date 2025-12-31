@@ -4,6 +4,7 @@ import com.fireworks.common.Result;
 import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.dto.UpdateProductRequest;
 import com.fireworks.service.ProductService;
+import com.fireworks.service.VideoExtractService;
 import com.fireworks.vo.PageVO;
 import com.fireworks.vo.ProductVO;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class ProductController {
 
     private final ProductService productService;
+    private final VideoExtractService videoExtractService;
 
     /**
      * 创建商品
@@ -95,5 +97,34 @@ public class ProductController {
         log.info("删除商品: id={}", id);
         productService.deleteProduct(id);
         return Result.success("删除成功", null);
+    }
+
+    /**
+     * 提取商品视频URL（从二维码图片解析）
+     *
+     * @param id 商品ID
+     * @return 更新后的商品信息
+     */
+    @PostMapping("/{id}/extract-video")
+    public Result<ProductVO> extractVideo(@PathVariable Long id) {
+        log.info("提取商品视频: id={}", id);
+
+        // 获取商品信息
+        ProductVO product = productService.getProductById(id);
+        if (product.getImages() == null || product.getImages().size() < 3) {
+            return Result.error(400, "商品缺少二维码图片");
+        }
+
+        // 从第三张图片（二维码）提取视频URL
+        String qrCodeImageUrl = product.getImages().get(2);
+        String videoUrl = videoExtractService.extractVideoFromQrCode(qrCodeImageUrl);
+
+        if (videoUrl == null) {
+            return Result.error(400, "无法从二维码提取视频链接");
+        }
+
+        // 更新商品视频URL
+        ProductVO updatedProduct = productService.updateVideoUrl(id, videoUrl);
+        return Result.success("视频提取成功", updatedProduct);
     }
 }
