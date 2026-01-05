@@ -65,6 +65,21 @@ public class ProductVO {
     private String videoUrl;
 
     /**
+     * 视频提取状态
+     */
+    private String videoExtractStatus;
+
+    /**
+     * 视频提取说明/失败原因
+     */
+    private String videoExtractMessage;
+
+    /**
+     * 视频提取目标网址（H5/二维码URL）
+     */
+    private String videoExtractTargetUrl;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createdAt;
@@ -91,6 +106,9 @@ public class ProductVO {
                 .status(product.getStatus())
                 .images(product.getImages())
                 .videoUrl(product.getVideoUrl())
+                .videoExtractStatus(product.getVideoExtractStatus())
+                .videoExtractMessage(product.getVideoExtractMessage())
+                .videoExtractTargetUrl(product.getVideoExtractTargetUrl())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .build();

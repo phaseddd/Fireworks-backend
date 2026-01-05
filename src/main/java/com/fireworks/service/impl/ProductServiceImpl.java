@@ -1,6 +1,7 @@
 package com.fireworks.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fireworks.dto.CreateProductRequest;
@@ -8,6 +9,7 @@ import com.fireworks.dto.UpdateProductRequest;
 import com.fireworks.entity.Product;
 import com.fireworks.exception.BusinessException;
 import com.fireworks.mapper.ProductMapper;
+import com.fireworks.service.ProductVideoExtractAsyncService;
 import com.fireworks.service.ProductService;
 import com.fireworks.vo.PageVO;
 import com.fireworks.vo.ProductVO;
@@ -15,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -31,6 +35,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
+    private final ProductVideoExtractAsyncService productVideoExtractAsyncService;
     private static final String PUBLIC_PRODUCT_STATUS = "ON_SHELF";
     private static final String DEFAULT_STATUS = "ON_SHELF";
 
@@ -68,6 +73,8 @@ public class ProductServiceImpl implements ProductService {
         }
 
         log.info("商品创建成功: id={}, name={}", product.getId(), product.getName());
+
+        runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, false));
         return ProductVO.fromEntity(product);
     }
 
@@ -98,6 +105,10 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "请上传燃放效果二维码图");
         }
 
+        boolean qrcodeChanged = product.getImages() == null
+                || product.getImages().size() < 3
+                || !java.util.Objects.equals(product.getImages().get(2), qrcodeImage);
+
         // Update product fields
         product.setName(request.getName().trim());
         product.setPrice(request.getPrice());
@@ -114,7 +125,25 @@ public class ProductServiceImpl implements ProductService {
         }
 
         log.info("商品更新成功: id={}, name={}", product.getId(), product.getName());
+
+        if (qrcodeChanged) {
+            runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, true));
+        }
         return ProductVO.fromEntity(product);
+    }
+
+    private static void runAfterCommit(Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+            return;
+        }
+
+        task.run();
     }
 
     @Override
@@ -275,7 +304,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public ProductVO updateVideoUrl(Long id, String videoUrl) {
+    public ProductVO updateVideoExtractInfo(Long id, String videoUrl, String status, String message, String targetUrl) {
         if (id == null) {
             throw new BusinessException(400, "商品ID不能为空");
         }
@@ -285,13 +314,19 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(404, "商品不存在");
         }
 
-        product.setVideoUrl(videoUrl);
-        int result = productMapper.updateById(product);
+        LambdaUpdateWrapper<Product> update = new LambdaUpdateWrapper<>();
+        update.eq(Product::getId, id)
+                .set(Product::getVideoUrl, videoUrl)
+                .set(Product::getVideoExtractStatus, status)
+                .set(Product::getVideoExtractMessage, message)
+                .set(Product::getVideoExtractTargetUrl, targetUrl);
+
+        int result = productMapper.update(null, update);
         if (result <= 0) {
-            throw new BusinessException(500, "更新视频URL失败");
+            throw new BusinessException(500, "更新视频提取信息失败");
         }
 
-        log.info("商品视频URL更新成功: id={}, videoUrl={}", id, videoUrl);
-        return ProductVO.fromEntity(product);
+        log.info("商品视频提取信息更新成功: id={}, status={}, targetUrl={}, videoUrl={}", id, status, targetUrl, videoUrl);
+        return ProductVO.fromEntity(productMapper.selectById(id));
     }
 }

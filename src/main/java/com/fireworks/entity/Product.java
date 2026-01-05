@@ -63,6 +63,21 @@ public class Product {
     private String videoUrl;
 
     /**
+     * 视频提取状态
+     */
+    private String videoExtractStatus;
+
+    /**
+     * 视频提取说明/失败原因
+     */
+    private String videoExtractMessage;
+
+    /**
+     * 视频提取目标网址（H5/二维码URL）
+     */
+    private String videoExtractTargetUrl;
+
+    /**
      * 逻辑删除标记
      */
     @TableLogic

@@ -83,11 +83,14 @@ public interface ProductService {
     void deleteProduct(Long id);
 
     /**
-     * 更新商品视频URL
+     * 更新商品视频提取信息
      *
-     * @param id       商品ID
-     * @param videoUrl 视频URL
+     * @param id        商品ID
+     * @param videoUrl  视频URL（可为null）
+     * @param status    视频提取状态（可为null）
+     * @param message   视频提取说明/失败原因（可为null）
+     * @param targetUrl 视频提取目标网址（可为null）
      * @return 更新后的商品信息
      */
-    ProductVO updateVideoUrl(Long id, String videoUrl);
+    ProductVO updateVideoExtractInfo(Long id, String videoUrl, String status, String message, String targetUrl);
 }

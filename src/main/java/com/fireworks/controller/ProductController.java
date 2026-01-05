@@ -3,6 +3,8 @@ package com.fireworks.controller;
 import com.fireworks.common.Result;
 import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.dto.UpdateProductRequest;
+import com.fireworks.videoextract.VideoExtractResult;
+import com.fireworks.videoextract.VideoExtractStatus;
 import com.fireworks.service.ProductService;
 import com.fireworks.service.VideoExtractService;
 import com.fireworks.vo.PageVO;
@@ -117,14 +119,19 @@ public class ProductController {
 
         // 从第三张图片（二维码）提取视频URL
         String qrCodeImageUrl = product.getImages().get(2);
-        String videoUrl = videoExtractService.extractVideoFromQrCode(qrCodeImageUrl);
+        VideoExtractResult result = videoExtractService.extractVideoFromQrCodeImage(qrCodeImageUrl);
+        VideoExtractStatus status = result != null ? result.getStatus() : null;
+        String statusText = status != null ? status.name() : VideoExtractStatus.FAILED.name();
+        String message = result != null ? result.getMessage() : "无法从二维码提取视频链接";
+        String targetUrl = result != null ? result.getTargetUrl() : null;
+        String videoUrl = status == VideoExtractStatus.SUCCESS && result != null ? result.getVideoUrl() : product.getVideoUrl();
 
-        if (videoUrl == null) {
-            return Result.error(400, "无法从二维码提取视频链接");
+        ProductVO updatedProduct = productService.updateVideoExtractInfo(id, videoUrl, statusText, message, targetUrl);
+
+        if (status != VideoExtractStatus.SUCCESS) {
+            return Result.error(400, message);
         }
 
-        // 更新商品视频URL
-        ProductVO updatedProduct = productService.updateVideoUrl(id, videoUrl);
         return Result.success("视频提取成功", updatedProduct);
     }
 }
