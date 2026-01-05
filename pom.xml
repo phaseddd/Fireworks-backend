@@ -80,10 +80,11 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
+        <!-- Dynamic/JS page loading (HtmlUnit) -->
         <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
-            <version>5.8.24</version>
+            <groupId>org.htmlunit</groupId>
+            <artifactId>htmlunit</artifactId>
+            <version>4.21.0</version>
         </dependency>
 
         <!-- QR Code Parsing (ZXing) -->

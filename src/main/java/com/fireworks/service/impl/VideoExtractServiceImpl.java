@@ -3,17 +3,22 @@ package com.fireworks.service.impl;
 import com.fireworks.service.VideoExtractService;
 import com.fireworks.videoextract.VideoExtractResult;
 import com.fireworks.videoextract.VideoExtractStatus;
-import cn.hutool.http.HttpRequest;
-import cn.hutool.http.HttpResponse;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.zxing.*;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.GlobalHistogramBinarizer;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.multi.GenericMultipleBarcodeReader;
 import lombok.extern.slf4j.Slf4j;
+import org.htmlunit.BrowserVersion;
+import org.htmlunit.FailingHttpStatusCodeException;
+import org.htmlunit.Page;
+import org.htmlunit.WebClient;
+import org.htmlunit.WebRequest;
+import org.htmlunit.WebResponse;
+import org.htmlunit.html.HtmlPage;
+import org.htmlunit.util.WebConnectionWrapper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -22,7 +27,13 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,8 +42,8 @@ import java.util.regex.Pattern;
  * 视频提取服务实现
  * 说明：
  * 1) 支持一张图片多个二维码
- * 2) 优先尝试：直链 → 已知平台API → 静态HTML正则
- * 3) 对 SPA/动态加载：返回 NEED_DYNAMIC_RENDER，并记录目标网址
+ * 2) 优先尝试：直链 → 已知平台API → HtmlUnit渲染提取
+ * 3) HtmlUnit渲染后仍无结果：返回 NEED_DYNAMIC_RENDER，并记录目标网址
  */
 @Slf4j
 @Service
@@ -43,6 +54,11 @@ public class VideoExtractServiceImpl implements VideoExtractService {
     private static final int VIDEO_URL_VALIDATE_TIMEOUT_MS = 5000;
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     private static final int QR_SCALE_THRESHOLD_PX = 640;
+    private static final int HTMLUNIT_JS_WAIT_MS = 8000;
+    private static final int HTMLUNIT_BACKGROUND_JS_WAIT_MS = 3000;
+    private static final int HTMLUNIT_MAX_FOLLOW_UP_PAGES = 2;
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     // 虎城烟花视频API地址
     private static final String HUCHENG_VIDEO_API_TEMPLATE =
@@ -58,6 +74,9 @@ public class VideoExtractServiceImpl implements VideoExtractService {
 
     private static final Pattern DIRECT_VIDEO_URL_PATTERN =
             Pattern.compile("^https?://[^\\s]+\\.(?:mp4|m3u8)(?:\\?[^\\s]*)?$", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern JS_LOCATION_ASSIGN_PATTERN =
+            Pattern.compile("(?i)window\\.location(?:\\.href)?\\s*=\\s*['\"]([^'\"]+)['\"]");
 
     private static final List<Pattern> VIDEO_URL_PATTERNS = List.of(
             // 模式1: 变量直取（如 DATA.video = "url"）
@@ -89,11 +108,7 @@ public class VideoExtractServiceImpl implements VideoExtractService {
         }
 
         try {
-            byte[] imageBytes = HttpRequest.get(imageUrl)
-                    .timeout(IMAGE_DOWNLOAD_TIMEOUT_MS)
-                    .header("User-Agent", USER_AGENT)
-                    .execute()
-                    .bodyBytes();
+            byte[] imageBytes = httpGetBytes(imageUrl, IMAGE_DOWNLOAD_TIMEOUT_MS);
 
             if (imageBytes == null || imageBytes.length == 0) {
                 log.warn("下载二维码图片为空: {}", imageUrl);
@@ -253,21 +268,19 @@ public class VideoExtractServiceImpl implements VideoExtractService {
     }
 
     private VideoExtractResult tryExtractVideoFromFwmallApi(String apiUrl, String targetUrl) {
-        try (HttpResponse resp = HttpRequest.get(apiUrl)
-                .timeout(HTTP_TIMEOUT_MS)
-                .header("User-Agent", USER_AGENT)
-                .execute()) {
-
-            if (resp.getStatus() < 200 || resp.getStatus() >= 300) {
+        try {
+            HttpResponse<String> resp = httpGetText(apiUrl, HTTP_TIMEOUT_MS);
+            int status = resp.statusCode();
+            if (status < 200 || status >= 300) {
                 return VideoExtractResult.builder()
                         .status(VideoExtractStatus.NEED_DYNAMIC_RENDER)
                         .targetUrl(targetUrl)
-                        .message("fwmall API请求失败: HTTP " + resp.getStatus())
+                        .message("fwmall API请求失败: HTTP " + status)
                         .build();
             }
 
-            JSONObject json = JSONUtil.parseObj(resp.body());
-            if (json.getInt("status", 0) != 1) {
+            JsonNode json = OBJECT_MAPPER.readTree(resp.body());
+            if (json.path("status").asInt(0) != 1) {
                 return VideoExtractResult.builder()
                         .status(VideoExtractStatus.NEED_DYNAMIC_RENDER)
                         .targetUrl(targetUrl)
@@ -275,11 +288,10 @@ public class VideoExtractServiceImpl implements VideoExtractService {
                         .build();
             }
 
-            JSONObject data = json.getJSONObject("data");
-            JSONObject info = data != null ? data.getJSONObject("info") : null;
-            String videoUrl = info != null ? info.getStr("video_url_com") : null;
+            JsonNode info = json.path("data").path("info");
+            String videoUrl = textOrNull(info.get("video_url_com"));
             if (!StringUtils.hasText(videoUrl)) {
-                videoUrl = info != null ? info.getStr("video_url") : null;
+                videoUrl = textOrNull(info.get("video_url"));
             }
 
             if (!StringUtils.hasText(videoUrl)) {
@@ -309,31 +321,28 @@ public class VideoExtractServiceImpl implements VideoExtractService {
     }
 
     private VideoExtractResult tryExtractVideoFromHuchengApi(String apiUrl, String targetUrl) {
-        try (HttpResponse resp = HttpRequest.get(apiUrl)
-                .timeout(HTTP_TIMEOUT_MS)
-                .header("User-Agent", USER_AGENT)
-                .execute()) {
-
-            if (resp.getStatus() < 200 || resp.getStatus() >= 300) {
+        try {
+            HttpResponse<String> resp = httpGetText(apiUrl, HTTP_TIMEOUT_MS);
+            int status = resp.statusCode();
+            if (status < 200 || status >= 300) {
                 return VideoExtractResult.builder()
                         .status(VideoExtractStatus.FAILED)
                         .targetUrl(targetUrl)
-                        .message("虎城API请求失败: HTTP " + resp.getStatus())
+                        .message("虎城API请求失败: HTTP " + status)
                         .build();
             }
 
-            JSONObject json = JSONUtil.parseObj(resp.body());
-            if (json.getInt("code", -1) != 1) {
+            JsonNode json = OBJECT_MAPPER.readTree(resp.body());
+            if (json.path("code").asInt(-1) != 1) {
                 return VideoExtractResult.builder()
                         .status(VideoExtractStatus.FAILED)
                         .targetUrl(targetUrl)
-                        .message("虎城API返回错误: " + json.getStr("msg"))
+                        .message("虎城API返回错误: " + json.path("msg").asText(""))
                         .build();
             }
 
-            JSONObject data = json.getJSONObject("data");
-            JSONArray list = data != null ? data.getJSONArray("list") : null;
-            if (list == null || list.isEmpty()) {
+            JsonNode list = json.path("data").path("list");
+            if (!list.isArray() || list.isEmpty()) {
                 return VideoExtractResult.builder()
                         .status(VideoExtractStatus.FAILED)
                         .targetUrl(targetUrl)
@@ -341,10 +350,10 @@ public class VideoExtractServiceImpl implements VideoExtractService {
                         .build();
             }
 
-            JSONObject firstVideo = list.getJSONObject(0);
-            String videoUrl = firstVideo != null ? firstVideo.getStr("video_url") : null;
-            if (!StringUtils.hasText(videoUrl) && firstVideo != null) {
-                videoUrl = firstVideo.getStr("url");
+            JsonNode firstVideo = list.get(0);
+            String videoUrl = textOrNull(firstVideo.get("video_url"));
+            if (!StringUtils.hasText(videoUrl)) {
+                videoUrl = textOrNull(firstVideo.get("url"));
             }
 
             if (!StringUtils.hasText(videoUrl)) {
@@ -374,66 +383,23 @@ public class VideoExtractServiceImpl implements VideoExtractService {
     }
 
     private VideoExtractResult tryExtractFromHtml(String pageUrl) {
-        try (HttpResponse resp = HttpRequest.get(pageUrl)
-                .timeout(HTTP_TIMEOUT_MS)
-                .setFollowRedirects(true)
-                .header("User-Agent", USER_AGENT)
-                .execute()) {
-
-            int status = resp.getStatus();
-            if (status < 200 || status >= 300) {
-                return VideoExtractResult.builder()
-                        .status(VideoExtractStatus.FAILED)
-                        .targetUrl(pageUrl)
-                        .message("页面访问失败: HTTP " + status)
-                        .build();
-            }
-
-            String html = resp.body();
-            String videoUrl = extractVideoFromHtml(html, pageUrl);
-            if (StringUtils.hasText(videoUrl)) {
-                return VideoExtractResult.builder()
-                        .status(VideoExtractStatus.SUCCESS)
-                        .videoUrl(videoUrl)
-                        .targetUrl(pageUrl)
-                        .message("静态HTML提取成功")
-                        .build();
-            }
-
-            if (looksLikeSpaShell(html)) {
-                return VideoExtractResult.builder()
-                        .status(VideoExtractStatus.NEED_DYNAMIC_RENDER)
-                        .targetUrl(pageUrl)
-                        .message("疑似SPA/动态加载，静态HTML未包含视频URL")
-                        .build();
-            }
-
-            return VideoExtractResult.builder()
-                    .status(VideoExtractStatus.FAILED)
-                    .targetUrl(pageUrl)
-                    .message("静态HTML未找到视频URL")
-                    .build();
-
-        } catch (Exception e) {
-            log.warn("页面访问异常: {}", pageUrl, e);
-            return VideoExtractResult.builder()
-                    .status(VideoExtractStatus.FAILED)
-                    .targetUrl(pageUrl)
-                    .message("页面访问异常")
-                    .build();
-        }
+        return tryExtractFromHtmlUnit(pageUrl);
     }
 
     private String extractVideoFromHtml(String html, String pageUrl) {
-        if (!StringUtils.hasText(html)) {
+        return extractVideoFromText(html, pageUrl);
+    }
+
+    private String extractVideoFromText(String text, String baseUrl) {
+        if (!StringUtils.hasText(text)) {
             return null;
         }
 
         for (Pattern pattern : VIDEO_URL_PATTERNS) {
-            Matcher matcher = pattern.matcher(html);
+            Matcher matcher = pattern.matcher(text);
             if (matcher.find()) {
                 String candidate = unescapeUrlCandidate(matcher.group(1));
-                String normalized = normalizeUrl(candidate, pageUrl);
+                String normalized = normalizeUrl(candidate, baseUrl);
                 if (StringUtils.hasText(normalized) && softValidateVideoUrl(normalized)) {
                     return normalized;
                 }
@@ -444,6 +410,182 @@ public class VideoExtractServiceImpl implements VideoExtractService {
             }
         }
         return null;
+    }
+
+    private VideoExtractResult tryExtractFromHtmlUnit(String pageUrl) {
+        HtmlUnitVideoSniffer sniffer = new HtmlUnitVideoSniffer();
+
+        try (WebClient webClient = buildHtmlUnitClient(sniffer)) {
+            HtmlPage page = webClient.getPage(pageUrl);
+            waitForJs(webClient);
+
+            int status = page.getWebResponse().getStatusCode();
+            if (status < 200 || status >= 300) {
+                return VideoExtractResult.builder()
+                        .status(VideoExtractStatus.FAILED)
+                        .targetUrl(pageUrl)
+                        .message("页面访问失败: HTTP " + status)
+                        .build();
+            }
+
+            String finalUrl = page.getUrl() != null ? page.getUrl().toString() : pageUrl;
+
+            String videoUrl = StringUtils.hasText(sniffer.bestVideoUrl)
+                    ? sniffer.bestVideoUrl
+                    : extractVideoFromText(page.asXml(), finalUrl);
+            if (StringUtils.hasText(videoUrl)) {
+                return VideoExtractResult.builder()
+                        .status(VideoExtractStatus.SUCCESS)
+                        .videoUrl(videoUrl)
+                        .targetUrl(finalUrl)
+                        .message("HtmlUnit渲染提取成功")
+                        .build();
+            }
+
+            List<String> followUps = extractFollowUpPageUrls(page.asXml(), finalUrl);
+            int tries = 0;
+            for (String next : followUps) {
+                if (tries >= HTMLUNIT_MAX_FOLLOW_UP_PAGES) {
+                    break;
+                }
+                tries++;
+
+                try {
+                    Page nextPage = webClient.getPage(next);
+                    waitForJs(webClient);
+                    if (nextPage instanceof HtmlPage nextHtml) {
+                        String nextUrl = nextHtml.getUrl() != null ? nextHtml.getUrl().toString() : next;
+                        String nextVideo = StringUtils.hasText(sniffer.bestVideoUrl)
+                                ? sniffer.bestVideoUrl
+                                : extractVideoFromText(nextHtml.asXml(), nextUrl);
+                        if (StringUtils.hasText(nextVideo)) {
+                            return VideoExtractResult.builder()
+                                    .status(VideoExtractStatus.SUCCESS)
+                                    .videoUrl(nextVideo)
+                                    .targetUrl(nextUrl)
+                                    .message("HtmlUnit跟随页面提取成功")
+                                    .build();
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("HtmlUnit跟随页面失败: {}", next, e);
+                }
+            }
+
+            return VideoExtractResult.builder()
+                    .status(VideoExtractStatus.NEED_DYNAMIC_RENDER)
+                    .targetUrl(finalUrl)
+                    .message("HtmlUnit渲染后仍未找到视频URL")
+                    .build();
+
+        } catch (FailingHttpStatusCodeException e) {
+            return VideoExtractResult.builder()
+                    .status(VideoExtractStatus.FAILED)
+                    .targetUrl(pageUrl)
+                    .message("页面访问失败: HTTP " + e.getStatusCode())
+                    .build();
+        } catch (Exception e) {
+            log.warn("HtmlUnit渲染访问异常: {}", pageUrl, e);
+            return VideoExtractResult.builder()
+                    .status(VideoExtractStatus.NEED_DYNAMIC_RENDER)
+                    .targetUrl(pageUrl)
+                    .message("HtmlUnit渲染访问异常")
+                    .build();
+        }
+    }
+
+    private static WebClient buildHtmlUnitClient(HtmlUnitVideoSniffer sniffer) {
+        WebClient webClient = new WebClient(BrowserVersion.CHROME);
+        webClient.getOptions().setJavaScriptEnabled(true);
+        webClient.getOptions().setCssEnabled(false);
+        webClient.getOptions().setThrowExceptionOnScriptError(false);
+        webClient.getOptions().setThrowExceptionOnFailingStatusCode(false);
+        webClient.getOptions().setRedirectEnabled(true);
+        webClient.getOptions().setTimeout(HTTP_TIMEOUT_MS);
+
+        webClient.setWebConnection(new WebConnectionWrapper(webClient) {
+            @Override
+            public WebResponse getResponse(WebRequest request) throws java.io.IOException {
+                URL requestUrl = request.getUrl();
+                WebResponse response = super.getResponse(request);
+                sniffer.tryAccept(requestUrl, response);
+                return response;
+            }
+        });
+
+        return webClient;
+    }
+
+    private static void waitForJs(WebClient webClient) {
+        webClient.waitForBackgroundJavaScriptStartingBefore(HTMLUNIT_JS_WAIT_MS);
+        webClient.waitForBackgroundJavaScript(HTMLUNIT_BACKGROUND_JS_WAIT_MS);
+    }
+
+    private static List<String> extractFollowUpPageUrls(String html, String baseUrl) {
+        if (!StringUtils.hasText(html)) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        Matcher m = JS_LOCATION_ASSIGN_PATTERN.matcher(html);
+        while (m.find()) {
+            String candidate = m.group(1);
+            String normalized = normalizeUrl(candidate, baseUrl);
+            if (StringUtils.hasText(normalized)) {
+                urls.add(normalized);
+            }
+        }
+        return new ArrayList<>(urls);
+    }
+
+    private static final class HtmlUnitVideoSniffer {
+        private volatile String bestVideoUrl;
+
+        void tryAccept(URL requestUrl, WebResponse response) {
+            if (requestUrl == null || response == null) {
+                return;
+            }
+
+            String url = requestUrl.toString();
+            if (DIRECT_VIDEO_URL_PATTERN.matcher(url).matches()) {
+                bestVideoUrl = url;
+                return;
+            }
+
+            String contentType;
+            try {
+                contentType = response.getContentType();
+            } catch (Exception ignored) {
+                contentType = null;
+            }
+
+            boolean maybeText = true;
+            if (contentType != null) {
+                String ct = contentType.toLowerCase(Locale.ROOT);
+                maybeText = ct.contains("json") || ct.contains("text") || ct.contains("javascript") || ct.contains("xml") || ct.contains("html");
+            }
+            if (!maybeText) {
+                return;
+            }
+
+            try {
+                String body = response.getContentAsString();
+                String found = null;
+                for (Pattern p : VIDEO_URL_PATTERNS) {
+                    Matcher matcher = p.matcher(body);
+                    if (matcher.find()) {
+                        found = matcher.group(1);
+                        break;
+                    }
+                }
+                if (StringUtils.hasText(found)) {
+                    String candidate = unescapeUrlCandidate(found);
+                    String normalized = normalizeUrl(candidate, requestUrl.toString());
+                    bestVideoUrl = StringUtils.hasText(normalized) ? normalized : candidate;
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private static String unescapeUrlCandidate(String candidate) {
@@ -564,17 +706,61 @@ public class VideoExtractServiceImpl implements VideoExtractService {
         if (!StringUtils.hasText(videoUrl)) {
             return false;
         }
-        try (HttpResponse resp = HttpRequest.head(videoUrl)
-                .timeout(VIDEO_URL_VALIDATE_TIMEOUT_MS)
-                .setFollowRedirects(true)
-                .header("User-Agent", USER_AGENT)
-                .execute()) {
-            int status = resp.getStatus();
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(videoUrl))
+                    .timeout(Duration.ofMillis(VIDEO_URL_VALIDATE_TIMEOUT_MS))
+                    .header("User-Agent", USER_AGENT)
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<Void> resp = httpClient().send(request, HttpResponse.BodyHandlers.discarding());
+            int status = resp.statusCode();
             return status >= 200 && status < 400;
         } catch (Exception e) {
             // 部分源站不支持 HEAD 或会拦截；不作为强失败
             return true;
         }
+    }
+
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(Duration.ofMillis(HTTP_TIMEOUT_MS))
+            .build();
+
+    private static HttpClient httpClient() {
+        return HTTP_CLIENT;
+    }
+
+    private static byte[] httpGetBytes(String url, int timeoutMs) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMillis(timeoutMs))
+                .header("User-Agent", USER_AGENT)
+                .GET()
+                .build();
+        HttpResponse<byte[]> resp = httpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
+        if (resp.statusCode() == HttpURLConnection.HTTP_OK) {
+            return resp.body();
+        }
+        return resp.body();
+    }
+
+    private static HttpResponse<String> httpGetText(String url, int timeoutMs) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMillis(timeoutMs))
+                .header("User-Agent", USER_AGENT)
+                .GET()
+                .build();
+        return httpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String textOrNull(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        String text = node.asText(null);
+        return StringUtils.hasText(text) ? text : null;
     }
 
     private static boolean isHttpUrl(String content) {
