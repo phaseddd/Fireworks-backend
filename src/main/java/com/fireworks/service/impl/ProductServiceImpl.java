@@ -28,6 +28,18 @@ import java.util.stream.Collectors;
 
 /**
  * 商品服务实现类
+ * <p>
+ * 负责商品的CRUD操作，包括：
+ * <ul>
+ *   <li>商品创建、更新、删除</li>
+ *   <li>商品列表查询（管理端/公开端）</li>
+ *   <li>商品详情查询</li>
+ *   <li>视频提取信息更新</li>
+ * </ul>
+ * <p>
+ * 商品保存时会自动触发异步视频提取流程（不阻塞保存操作）
+ *
+ * @see ProductVideoExtractAsyncService 异步视频提取服务
  */
 @Slf4j
 @Service
@@ -36,9 +48,26 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
     private final ProductVideoExtractAsyncService productVideoExtractAsyncService;
+
+    /** 公开商品状态：上架 */
     private static final String PUBLIC_PRODUCT_STATUS = "ON_SHELF";
+    /** 默认商品状态：上架 */
     private static final String DEFAULT_STATUS = "ON_SHELF";
 
+    /**
+     * 创建商品
+     * <p>
+     * 业务流程：
+     * <ol>
+     *   <li>校验图片参数（必须包含3张图：外观图、详情图、二维码图）</li>
+     *   <li>构建商品实体并保存到数据库</li>
+     *   <li>事务提交后，异步触发视频提取任务（从第3张二维码图中提取视频URL）</li>
+     * </ol>
+     *
+     * @param request 创建商品请求，包含名称、价格、分类、库存、描述、图片列表
+     * @return 创建成功的商品VO
+     * @throws BusinessException 图片参数不完整或保存失败时抛出
+     */
     @Override
     @Transactional
     public ProductVO createProduct(CreateProductRequest request) {
@@ -74,10 +103,28 @@ public class ProductServiceImpl implements ProductService {
 
         log.info("商品创建成功: id={}, name={}", product.getId(), product.getName());
 
+        // 事务提交后异步触发视频提取（resetVideoUrl=false：新建商品无需重置）
         runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, false));
         return ProductVO.fromEntity(product);
     }
 
+    /**
+     * 更新商品
+     * <p>
+     * 业务流程：
+     * <ol>
+     *   <li>校验商品是否存在</li>
+     *   <li>校验图片参数完整性</li>
+     *   <li>检测第3张二维码图是否变更</li>
+     *   <li>更新商品信息到数据库</li>
+     *   <li>若二维码图变更，事务提交后异步重新触发视频提取</li>
+     * </ol>
+     *
+     * @param id      商品ID
+     * @param request 更新商品请求
+     * @return 更新后的商品VO
+     * @throws BusinessException 商品不存在、参数不完整或更新失败时抛出
+     */
     @Override
     @Transactional
     public ProductVO updateProduct(Long id, UpdateProductRequest request) {
@@ -126,12 +173,21 @@ public class ProductServiceImpl implements ProductService {
 
         log.info("商品更新成功: id={}, name={}", product.getId(), product.getName());
 
+        // 仅当二维码图变更时才重新触发视频提取（resetVideoUrl=true：更新时需重置旧视频URL）
         if (qrcodeChanged) {
             runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, true));
         }
         return ProductVO.fromEntity(product);
     }
 
+    /**
+     * 在事务提交后执行任务
+     * <p>
+     * 用于确保异步任务在数据库事务成功提交后才执行，
+     * 避免异步任务读取到未提交的数据或事务回滚后仍执行任务。
+     *
+     * @param task 要执行的任务
+     */
     private static void runAfterCommit(Runnable task) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -146,6 +202,17 @@ public class ProductServiceImpl implements ProductService {
         task.run();
     }
 
+    /**
+     * 获取商品列表（管理端）
+     * <p>
+     * 支持按状态筛选和排序，返回分页结果。
+     *
+     * @param status 商品状态筛选（可选）
+     * @param sort   排序方式，格式："字段名,asc/desc"（可选，默认按创建时间倒序）
+     * @param page   页码（从1开始）
+     * @param size   每页数量
+     * @return 商品分页列表
+     */
     @Override
     public PageVO<ProductVO> getProductList(String status, String sort, Integer page, Integer size) {
         // 参数校验和默认值
@@ -184,6 +251,25 @@ public class ProductServiceImpl implements ProductService {
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
     }
 
+    /**
+     * 获取公开商品列表（小程序端）
+     * <p>
+     * 仅返回状态为"上架"的商品，支持多维度筛选：
+     * <ul>
+     *   <li>分类筛选</li>
+     *   <li>价格区间筛选</li>
+     *   <li>关键词模糊搜索（按商品名称）</li>
+     * </ul>
+     *
+     * @param page     页码（从1开始）
+     * @param size     每页数量
+     * @param sort     排序方式
+     * @param category 分类筛选（可选）
+     * @param minPrice 最低价格（可选）
+     * @param maxPrice 最高价格（可选）
+     * @param keyword  搜索关键词（可选）
+     * @return 商品分页列表
+     */
     @Override
     public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice, String keyword) {
         if (page == null || page < 1) {
@@ -227,12 +313,28 @@ public class ProductServiceImpl implements ProductService {
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
     }
 
+    /**
+     * 获取热门搜索关键词
+     * <p>
+     * 当前为静态配置，后续可扩展为基于搜索统计动态获取。
+     *
+     * @return 热门关键词列表
+     */
     @Override
     public List<String> getHotKeywords() {
         // 静态配置热门关键词（后续可扩展为基于搜索统计动态获取）
         return java.util.Arrays.asList("烟花", "礼花", "鞭炮", "仙女棒", "孔明灯", "烟火", "礼品装");
     }
 
+    /**
+     * 应用排序条件到查询构建器
+     * <p>
+     * 支持的排序字段：updatedAt、createdAt、price、id
+     * 默认按创建时间倒序排列。
+     *
+     * @param queryWrapper 查询构建器
+     * @param sort         排序参数，格式："字段名,asc/desc"
+     */
     private static void applySort(LambdaQueryWrapper<Product> queryWrapper, String sort) {
         if (!StringUtils.hasText(sort)) {
             queryWrapper.orderByDesc(Product::getCreatedAt);
@@ -253,6 +355,13 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * 根据ID获取商品详情（管理端）
+     *
+     * @param id 商品ID
+     * @return 商品VO
+     * @throws BusinessException 商品不存在时抛出
+     */
     @Override
     public ProductVO getProductById(Long id) {
         if (id == null) {
@@ -267,6 +376,15 @@ public class ProductServiceImpl implements ProductService {
         return ProductVO.fromEntity(product);
     }
 
+    /**
+     * 根据ID获取公开商品详情（小程序端）
+     * <p>
+     * 仅返回状态为"上架"的商品，用于小程序端商品详情展示。
+     *
+     * @param id 商品ID
+     * @return 商品VO
+     * @throws BusinessException 商品不存在或未上架时抛出
+     */
     @Override
     public ProductVO getPublicProductById(Long id) {
         if (id == null) {
@@ -281,6 +399,12 @@ public class ProductServiceImpl implements ProductService {
         return ProductVO.fromEntity(product);
     }
 
+    /**
+     * 删除商品（逻辑删除）
+     *
+     * @param id 商品ID
+     * @throws BusinessException 商品不存在或删除失败时抛出
+     */
     @Override
     @Transactional
     public void deleteProduct(Long id) {
@@ -302,6 +426,19 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * 更新商品视频提取信息
+     * <p>
+     * 由异步视频提取服务调用，用于更新提取结果到商品记录。
+     *
+     * @param id        商品ID
+     * @param videoUrl  提取到的视频URL（成功时有值）
+     * @param status    提取状态（SUCCESS/FAILED/NEED_DYNAMIC_RENDER等）
+     * @param message   状态描述信息
+     * @param targetUrl 目标网址（用于失败后分析或补充规则）
+     * @return 更新后的商品VO
+     * @throws BusinessException 商品不存在或更新失败时抛出
+     */
     @Override
     @Transactional
     public ProductVO updateVideoExtractInfo(Long id, String videoUrl, String status, String message, String targetUrl) {
