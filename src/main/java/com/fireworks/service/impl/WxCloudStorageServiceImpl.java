@@ -7,7 +7,6 @@ import com.fireworks.service.FileStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -119,26 +118,32 @@ public class WxCloudStorageServiceImpl implements FileStorageService {
 
     /**
      * 上传文件到 COS (使用 POST multipart/form-data)
+     *
+     * <p>腾讯云 COS POST 上传要求：</p>
+     * <ul>
+     *   <li>file 字段必须放在表单最后</li>
+     *   <li>需要设置 success_action_status 避免 303 重定向</li>
+     * </ul>
      */
     private void uploadToCos(UploadCredential credential, byte[] bytes, String cloudPath) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-        // 构建 multipart 表单
+        // 构建 multipart 表单（注意：file 必须放最后）
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("key", cloudPath);
         body.add("Signature", credential.authorization);
         body.add("x-cos-security-token", credential.token);
         body.add("x-cos-meta-fileid", credential.cosFileId);
+        body.add("success_action_status", "200");
 
-        // 添加文件
-        ByteArrayResource fileResource = new ByteArrayResource(bytes) {
-            @Override
-            public String getFilename() {
-                return cloudPath.substring(cloudPath.lastIndexOf('/') + 1);
-            }
-        };
-        body.add("file", fileResource);
+        // 文件必须作为最后一个字段
+        String filename = cloudPath.substring(cloudPath.lastIndexOf('/') + 1);
+        HttpHeaders fileHeaders = new HttpHeaders();
+        fileHeaders.setContentDispositionFormData("file", filename);
+        fileHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        HttpEntity<byte[]> filePart = new HttpEntity<>(bytes, fileHeaders);
+        body.add("file", filePart);
 
         HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
 
