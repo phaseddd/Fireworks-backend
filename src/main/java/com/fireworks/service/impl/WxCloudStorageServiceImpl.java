@@ -6,8 +6,7 @@ import com.fireworks.exception.BusinessException;
 import com.fireworks.service.FileStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -29,8 +28,7 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@Primary
-@ConditionalOnProperty(name = "app.storage.type", havingValue = "cloud")
+@Profile("prod")
 public class WxCloudStorageServiceImpl implements FileStorageService {
 
     private static final String WX_CLOUD_BASE_URL = "http://api.weixin.qq.com";

@@ -4,7 +4,7 @@ import com.fireworks.exception.BusinessException;
 import com.fireworks.service.FileStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -13,11 +13,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * 本地文件存储实现（用于本地开发/兜底）
+ * 本地文件存储实现（用于本地开发）
  */
 @Slf4j
 @Service
-@ConditionalOnProperty(name = "app.storage.type", havingValue = "local", matchIfMissing = true)
+@Profile("!prod")
 public class LocalFileStorageServiceImpl implements FileStorageService {
 
     @Value("${app.storage.local.upload-path:D:/Fireworks/picture/}")
