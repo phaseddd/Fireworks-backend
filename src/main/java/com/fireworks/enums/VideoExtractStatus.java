@@ -1,4 +1,4 @@
-package com.fireworks.videoextract;
+package com.fireworks.enums;
 
 /**
  * 视频提取状态

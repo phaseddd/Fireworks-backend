@@ -1,8 +1,8 @@
 package com.fireworks.service.impl;
 
 import com.fireworks.service.VideoExtractService;
-import com.fireworks.videoextract.VideoExtractResult;
-import com.fireworks.videoextract.VideoExtractStatus;
+import com.fireworks.dto.VideoExtractResult;
+import com.fireworks.enums.VideoExtractStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.zxing.*;

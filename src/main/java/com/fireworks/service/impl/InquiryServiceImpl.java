@@ -126,7 +126,8 @@ public class InquiryServiceImpl implements InquiryService {
                 .wechat(i.getWechat())
                 .productCount(productCountMap.getOrDefault(i.getId(), 0))
                 .agentCode(i.getAgentCode())
-                .agentName(agentNameMap.get(i.getAgentCode()))
+                // agentCode 可能为 null（游客直接询价），需要先检查再取值
+                .agentName(i.getAgentCode() != null ? agentNameMap.get(i.getAgentCode()) : null)
                 .createdAt(i.getCreatedAt())
                 .build()).toList();
 

@@ -1,6 +1,6 @@
 package com.fireworks.service;
 
-import com.fireworks.videoextract.VideoExtractResult;
+import com.fireworks.dto.VideoExtractResult;
 
 /**
  * 视频提取服务接口

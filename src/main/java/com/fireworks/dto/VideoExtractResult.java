@@ -1,5 +1,6 @@
-package com.fireworks.videoextract;
+package com.fireworks.dto;
 
+import com.fireworks.enums.VideoExtractStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
