@@ -44,6 +44,21 @@ public class Agent {
     private String qrcodeUrl;
 
     /**
+     * 代理商绑定 OpenID（用于分享详情页权限校验）
+     */
+    private String openid;
+
+    /**
+     * 一次性绑定码（短期有效）
+     */
+    private String bindCode;
+
+    /**
+     * 绑定码过期时间
+     */
+    private LocalDateTime bindCodeExpiresAt;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

@@ -61,9 +61,14 @@ CREATE TABLE `agent` (
     `phone` VARCHAR(20) COMMENT '联系电话',
     `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态: ACTIVE-启用, DISABLED-禁用',
     `qrcode_url` VARCHAR(255) COMMENT '小程序码图片URL',
+    `openid` VARCHAR(100) NULL COMMENT '代理商绑定OpenID',
+    `bind_code` VARCHAR(32) NULL COMMENT '一次性绑定码',
+    `bind_code_expires_at` DATETIME NULL COMMENT '绑定码过期时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX `idx_code` (`code`),
+    UNIQUE KEY `uk_openid` (`openid`),
+    UNIQUE KEY `uk_bind_code` (`bind_code`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='代理商表';
 
@@ -74,6 +79,7 @@ DROP TABLE IF EXISTS `inquiry`;
 CREATE TABLE `inquiry` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
     `agent_code` VARCHAR(10) COMMENT '代理商编码(可为空表示直接访问)',
+    `share_code` VARCHAR(64) NOT NULL UNIQUE COMMENT '分享码',
     `phone` VARCHAR(20) NOT NULL COMMENT '客户手机号',
     `wechat` VARCHAR(50) COMMENT '客户微信号',
     `openid` VARCHAR(100) COMMENT '微信用户openid',

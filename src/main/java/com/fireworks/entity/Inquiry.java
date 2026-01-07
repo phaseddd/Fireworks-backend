@@ -25,6 +25,11 @@ public class Inquiry {
     private String agentCode;
 
     /**
+     * 分享码（用于分享卡片/分享详情页定位）
+     */
+    private String shareCode;
+
+    /**
      * 客户手机号
      */
     private String phone;

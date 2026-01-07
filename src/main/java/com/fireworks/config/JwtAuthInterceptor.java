@@ -29,6 +29,11 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            // 部分接口允许在无 JWT 的情况下访问（由 Controller 内部进行 OpenID/权限校验）
+            if (shouldBypassJwt(request)) {
+                return true;
+            }
+
             log.warn("请求缺少有效的 Authorization 头: {}", request.getRequestURI());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json;charset=UTF-8");
@@ -53,6 +58,28 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
         log.debug("用户 {} 访问: {}", username, request.getRequestURI());
 
         return true;
+    }
+
+    private boolean shouldBypassJwt(HttpServletRequest request) {
+        String method = request.getMethod();
+        String uri = request.getRequestURI();
+
+        // 客户端创建询价：不需要 JWT（生产环境通常由云托管注入 OpenID）
+        if ("POST".equalsIgnoreCase(method) && "/api/v1/inquiries".equals(uri)) {
+            return true;
+        }
+
+        // 分享详情页读取：支持管理员 JWT 或代理商 OpenID（无 JWT 时在 Controller 内部校验）
+        if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/v1/inquiries/share/")) {
+            return true;
+        }
+
+        // 代理商绑定：不需要 JWT（使用 OpenID + bindCode）
+        if ("POST".equalsIgnoreCase(method) && "/api/v1/agents/bind".equals(uri)) {
+            return true;
+        }
+
+        return false;
     }
 
     @Override
