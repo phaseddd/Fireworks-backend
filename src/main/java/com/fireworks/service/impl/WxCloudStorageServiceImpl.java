@@ -7,8 +7,11 @@ import com.fireworks.service.FileStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
@@ -59,7 +62,7 @@ public class WxCloudStorageServiceImpl implements FileStorageService {
             UploadCredential credential = getUploadCredential(cloudPath);
 
             // Step 2: 上传文件到 COS
-            uploadToCos(credential, bytes);
+            uploadToCos(credential, bytes, cloudPath);
 
             log.info("云存储上传成功: {} -> {}", cloudPath, credential.fileId);
             return credential.fileId;
@@ -115,20 +118,32 @@ public class WxCloudStorageServiceImpl implements FileStorageService {
     }
 
     /**
-     * 上传文件到 COS
+     * 上传文件到 COS (使用 POST multipart/form-data)
      */
-    private void uploadToCos(UploadCredential credential, byte[] bytes) {
+    private void uploadToCos(UploadCredential credential, byte[] bytes, String cloudPath) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        headers.set("Authorization", credential.authorization);
-        headers.set("x-cos-security-token", credential.token);
-        headers.set("x-cos-meta-fileid", credential.cosFileId);
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-        HttpEntity<byte[]> request = new HttpEntity<>(bytes, headers);
+        // 构建 multipart 表单
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("key", cloudPath);
+        body.add("Signature", credential.authorization);
+        body.add("x-cos-security-token", credential.token);
+        body.add("x-cos-meta-fileid", credential.cosFileId);
 
-        ResponseEntity<String> response = restTemplate.exchange(
+        // 添加文件
+        ByteArrayResource fileResource = new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return cloudPath.substring(cloudPath.lastIndexOf('/') + 1);
+            }
+        };
+        body.add("file", fileResource);
+
+        HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
                 credential.url,
-                HttpMethod.PUT,
                 request,
                 String.class
         );
