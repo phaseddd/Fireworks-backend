@@ -3,6 +3,7 @@ package com.fireworks.service.impl;
 import com.fireworks.exception.BusinessException;
 import com.fireworks.service.WechatCloudService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -10,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +28,9 @@ public class WechatCloudServiceImpl implements WechatCloudService {
     private static final String WXACODE_UNLIMIT_PATH = "/wxa/getwxacodeunlimit";
 
     private final RestTemplate restTemplate;
+
+    @Value("${app.wechat.wxa-code.env-version:release}")
+    private String envVersion;
 
     public WechatCloudServiceImpl() {
         this.restTemplate = new RestTemplate();
@@ -44,7 +49,7 @@ public class WechatCloudServiceImpl implements WechatCloudService {
         Map<String, Object> params = new HashMap<>();
         params.put("scene", scene);
         params.put("page", page);
-        params.put("env_version", "release");
+        params.put("env_version", normalizeEnvVersion(envVersion));
         params.put("width", 430);
         params.put("auto_color", false);
         params.put("line_color", Map.of("r", 255, "g", 72, "b", 0));
@@ -90,5 +95,15 @@ public class WechatCloudServiceImpl implements WechatCloudService {
         }
         return i < body.length && body[i] == '{';
     }
-}
 
+    private String normalizeEnvVersion(String value) {
+        if (value == null || value.isBlank()) {
+            return "release";
+        }
+        String v = value.trim().toLowerCase(Locale.ROOT);
+        return switch (v) {
+            case "release", "trial", "develop" -> v;
+            default -> "release";
+        };
+    }
+}

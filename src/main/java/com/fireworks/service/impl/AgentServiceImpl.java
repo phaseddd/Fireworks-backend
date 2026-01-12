@@ -177,7 +177,23 @@ public class AgentServiceImpl implements AgentService {
                     .set(Agent::getBindCodeExpiresAt, expiresAt);
             try {
                 agentMapper.update(null, update);
-                return AgentBindCodeVO.builder().bindCode(bindCode).expiresAt(expiresAt).build();
+                String bindQrcodeUrl = null;
+                try {
+                    // 生成“绑定二维码”：扫码直达绑定页，scene 携带绑定码
+                    String scene = "b=" + bindCode;
+                    byte[] png = wechatCloudService.generateWxaCode(scene, "pages/agent/bind/index");
+                    String filename = "agent_bind_" + agent.getCode() + ".png";
+                    bindQrcodeUrl = fileStorageService.save("qrcode/", filename, png);
+                } catch (Exception e) {
+                    // 兜底：二维码生成失败不影响绑定码使用（仍可手动输入）
+                    log.warn("生成绑定二维码失败，将仅返回绑定码: {}", e.getMessage());
+                }
+
+                return AgentBindCodeVO.builder()
+                        .bindCode(bindCode)
+                        .bindQrcodeUrl(bindQrcodeUrl)
+                        .expiresAt(expiresAt)
+                        .build();
             } catch (Exception e) {
                 log.warn("生成绑定码冲突，重试: {}", e.getMessage());
             }
