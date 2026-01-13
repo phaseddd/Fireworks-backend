@@ -179,9 +179,9 @@ public class AgentServiceImpl implements AgentService {
                 agentMapper.update(null, update);
                 String bindQrcodeUrl = null;
                 try {
-                    // 生成“绑定二维码”：扫码直达绑定页，scene 携带绑定码
                     String scene = "b=" + bindCode;
-                    byte[] png = wechatCloudService.generateWxaCode(scene, "pages/agent/bind/index");
+                    // 使用首页作为落地页：避免线上版本不包含绑定页导致 41030 invalid page
+                    byte[] png = wechatCloudService.generateWxaCode(scene, "pages/index/index");
                     String filename = "agent_bind_" + agent.getCode() + ".png";
                     bindQrcodeUrl = fileStorageService.save("qrcode/", filename, png);
                 } catch (Exception e) {
