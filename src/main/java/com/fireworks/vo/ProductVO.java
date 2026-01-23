@@ -99,7 +99,6 @@ public class ProductVO {
      * <p>
      * 注意：categoryName 直接取自 product.category 字段（数据库存储的分类名称）
      */
-    @SuppressWarnings("deprecation")
     public static ProductVO fromEntity(Product product) {
         if (product == null) {
             return null;

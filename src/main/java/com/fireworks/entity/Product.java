@@ -32,10 +32,11 @@ public class Product {
     private BigDecimal price;
 
     /**
-     * 商品分类: GIFT-礼花类, FIREWORK-烟花类, FIRECRACKER-鞭炮类, COMBO-组合类, OTHER-其他
-     * @deprecated 已迁移到 categoryId，保留用于数据迁移兼容
+     * 分类名称（冗余存储，与 category 表的 name 字段同步）
+     * <p>
+     * 用于快速展示分类名称，避免每次查询关联表。
+     * 当分类名称变更时，由 CategoryService 负责同步更新。
      */
-    @Deprecated
     private String category;
 
     /**

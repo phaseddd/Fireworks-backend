@@ -29,14 +29,7 @@ public class CreateProductRequest {
     private BigDecimal price;
 
     /**
-     * 商品分类名称
-     * @deprecated 已废弃，使用 categoryId 替代。保留字段仅用于数据兼容。
-     */
-    @Deprecated
-    private String category;
-
-    /**
-     * 分类ID（关联 category 表，推荐使用）
+     * 分类ID（关联 category 表）
      */
     private Long categoryId;
 
