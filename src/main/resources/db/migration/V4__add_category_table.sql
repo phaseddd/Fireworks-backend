@@ -45,5 +45,11 @@ UPDATE product SET category_id = (
 )
 WHERE category_id IS NULL;
 
--- ========== 5. 可选：迁移完成验证后可移除旧字段 ==========
+-- ========== 5. 同步更新 category 字段为分类名称（去除枚举值） ==========
+UPDATE product p
+JOIN category c ON p.category_id = c.id
+SET p.category = c.name
+WHERE p.category IN ('GIFT', 'FIREWORK', 'FIRECRACKER', 'COMBO', 'OTHER');
+
+-- ========== 6. 可选：迁移完成验证后可移除旧字段 ==========
 -- ALTER TABLE product DROP COLUMN category;
