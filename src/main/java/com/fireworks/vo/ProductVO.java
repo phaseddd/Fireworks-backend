@@ -35,13 +35,6 @@ public class ProductVO {
     private BigDecimal price;
 
     /**
-     * 商品分类
-     * @deprecated 已迁移到 categoryId/categoryName
-     */
-    @Deprecated
-    private String category;
-
-    /**
      * 分类ID
      */
     private Long categoryId;
@@ -103,7 +96,10 @@ public class ProductVO {
 
     /**
      * 从实体转换为 VO
+     * <p>
+     * 注意：categoryName 直接取自 product.category 字段（数据库存储的分类名称）
      */
+    @SuppressWarnings("deprecation")
     public static ProductVO fromEntity(Product product) {
         if (product == null) {
             return null;
@@ -112,9 +108,8 @@ public class ProductVO {
                 .id(product.getId())
                 .name(product.getName())
                 .price(product.getPrice())
-                .category(product.getCategory())
                 .categoryId(product.getCategoryId())
-                .categoryName(product.getCategoryName())
+                .categoryName(product.getCategory())
                 .description(product.getDescription())
                 .stock(product.getStock())
                 .status(product.getStatus())

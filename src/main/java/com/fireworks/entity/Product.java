@@ -43,11 +43,6 @@ public class Product {
      */
     private Long categoryId;
 
-    /**
-     * 分类名称（非表字段，联查时填充）
-     */
-    @TableField(exist = false)
-    private String categoryName;
 
     /**
      * 商品描述

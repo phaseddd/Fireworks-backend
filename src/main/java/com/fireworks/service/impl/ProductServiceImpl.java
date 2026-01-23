@@ -26,8 +26,6 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -119,8 +117,6 @@ public class ProductServiceImpl implements ProductService {
         // 事务提交后异步触发视频提取（resetVideoUrl=false：新建商品无需重置）
         runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, false));
 
-        // 填充分类名称（便于前端直接展示）
-        fillCategoryNames(List.of(product));
         return ProductVO.fromEntity(product);
     }
 
@@ -202,8 +198,6 @@ public class ProductServiceImpl implements ProductService {
             runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, true));
         }
 
-        // 填充分类名称（便于前端直接展示）
-        fillCategoryNames(List.of(product));
         return ProductVO.fromEntity(product);
     }
 
@@ -269,7 +263,6 @@ public class ProductServiceImpl implements ProductService {
 
         // 转换为VO
         List<Product> products = productPage.getRecords();
-        fillCategoryNames(products);
 
         List<ProductVO> productVOList = products.stream()
                 .map(ProductVO::fromEntity)
@@ -339,10 +332,7 @@ public class ProductServiceImpl implements ProductService {
 
         IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
 
-        List<Product> products = productPage.getRecords();
-        fillCategoryNames(products);
-
-        List<ProductVO> productVOList = products.stream()
+        List<ProductVO> productVOList = productPage.getRecords().stream()
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
@@ -394,43 +384,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /**
-     * 批量填充分类名称（避免前端在兼容期只能显示旧的 category 枚举）
-     *
-     * @param products 商品列表（可为空）
-     */
-    private void fillCategoryNames(List<Product> products) {
-        if (products == null || products.isEmpty()) {
-            return;
-        }
-
-        List<Long> categoryIds = products.stream()
-                .map(Product::getCategoryId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        if (categoryIds.isEmpty()) {
-            return;
-        }
-
-        List<Category> categories = categoryMapper.selectBatchIds(categoryIds);
-        if (categories == null || categories.isEmpty()) {
-            return;
-        }
-
-        Map<Long, String> categoryNameById = categories.stream()
-                .filter(category -> category.getId() != null)
-                .collect(Collectors.toMap(Category::getId, Category::getName, (a, b) -> a));
-
-        for (Product product : products) {
-            Long categoryId = product.getCategoryId();
-            if (categoryId == null) {
-                continue;
-            }
-            product.setCategoryName(categoryNameById.get(categoryId));
-        }
-    }
-
-    /**
      * 根据ID获取商品详情（管理端）
      *
      * @param id 商品ID
@@ -443,7 +396,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "商品ID不能为空");
         }
 
-        Product product = productMapper.selectByIdWithCategory(id);
+        Product product = productMapper.selectById(id);
         if (product == null) {
             throw new BusinessException(404, "商品不存在");
         }
@@ -466,7 +419,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "商品ID不能为空");
         }
 
-        Product product = productMapper.selectByIdWithCategory(id);
+        Product product = productMapper.selectById(id);
         if (product == null || !PUBLIC_PRODUCT_STATUS.equals(product.getStatus())) {
             throw new BusinessException(404, "商品不存在");
         }
@@ -539,6 +492,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         log.info("商品视频提取信息更新成功: id={}, status={}, targetUrl={}, videoUrl={}", id, status, targetUrl, videoUrl);
-        return ProductVO.fromEntity(productMapper.selectByIdWithCategory(id));
+
+        return ProductVO.fromEntity(productMapper.selectById(id));
     }
 }

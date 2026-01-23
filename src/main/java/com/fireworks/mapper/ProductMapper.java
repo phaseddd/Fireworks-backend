@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fireworks.entity.Product;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * 商品 Mapper 接口
@@ -13,16 +13,15 @@ import org.apache.ibatis.annotations.Select;
 public interface ProductMapper extends BaseMapper<Product> {
 
     /**
-     * 根据ID查询商品（带分类名称）
+     * 根据分类ID批量更新商品的 category 字段（分类名称）
+     * <p>
+     * 当分类名称变更时，需要同步更新所有关联商品的 category 字段，
+     * 以保持数据一致性。
      *
-     * @param id 商品ID
-     * @return 商品信息（含分类名称）
+     * @param categoryId   分类ID
+     * @param categoryName 新的分类名称
+     * @return 更新的记录数
      */
-    @Select("""
-        SELECT p.*, c.name AS category_name
-        FROM product p
-        LEFT JOIN category c ON p.category_id = c.id
-        WHERE p.id = #{id} AND p.deleted = 0
-        """)
-    Product selectByIdWithCategory(@Param("id") Long id);
+    @Update("UPDATE product SET category = #{categoryName} WHERE category_id = #{categoryId} AND deleted = 0")
+    int updateCategoryNameByCategoryId(@Param("categoryId") Long categoryId, @Param("categoryName") String categoryName);
 }

@@ -6,6 +6,7 @@ import com.fireworks.dto.CreateCategoryRequest;
 import com.fireworks.dto.UpdateCategoryRequest;
 import com.fireworks.entity.Category;
 import com.fireworks.mapper.CategoryMapper;
+import com.fireworks.mapper.ProductMapper;
 import com.fireworks.service.CategoryService;
 import com.fireworks.vo.CategoryVO;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryMapper categoryMapper;
+    private final ProductMapper productMapper;
 
     @Override
     public List<CategoryVO> getAllCategories() {
@@ -93,8 +95,11 @@ public class CategoryServiceImpl implements CategoryService {
             throw new BusinessException(400, "分类名称不能为空");
         }
 
+        String oldName = category.getName();
+        boolean nameChanged = false;
+
         // Check if new name already exists (exclude current category)
-        if (!name.equals(category.getName())) {
+        if (!name.equals(oldName)) {
             LambdaQueryWrapper<Category> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.eq(Category::getName, name)
                     .ne(Category::getId, id);
@@ -102,6 +107,7 @@ public class CategoryServiceImpl implements CategoryService {
                 throw new BusinessException(400, "分类名称已存在");
             }
             category.setName(name);
+            nameChanged = true;
         }
 
         if (request.getStatus() != null) {
@@ -110,7 +116,14 @@ public class CategoryServiceImpl implements CategoryService {
 
         categoryMapper.updateById(category);
 
-        log.info("Updated category: id={}, name={}", category.getId(), category.getName());
+        // 分类名称变更时，同步更新该分类下所有商品的 category 字段
+        if (nameChanged) {
+            int updatedCount = productMapper.updateCategoryNameByCategoryId(id, name);
+            log.info("Updated category: id={}, name={}, synced {} products", id, name, updatedCount);
+        } else {
+            log.info("Updated category: id={}, name={}", id, name);
+        }
+
         return CategoryVO.fromEntity(category);
     }
 
