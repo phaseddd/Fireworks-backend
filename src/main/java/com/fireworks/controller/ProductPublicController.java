@@ -30,13 +30,14 @@ public class ProductPublicController {
     /**
      * 获取商品列表（公开）
      *
-     * @param page     页码（从1开始，默认1）
-     * @param size     每页数量（默认20）
-     * @param sort     排序字段与方向（可选）
-     * @param category 商品分类筛选（可选）：GIFT/FIREWORK/FIRECRACKER/COMBO/OTHER
-     * @param minPrice 最低价格筛选（可选）
-     * @param maxPrice 最高价格筛选（可选）
-     * @param keyword  搜索关键词（可选）：模糊匹配商品名称
+     * @param page       页码（从1开始，默认1）
+     * @param size       每页数量（默认20）
+     * @param sort       排序字段与方向（可选）
+     * @param categoryId 分类ID筛选（可选，推荐使用）
+     * @param category   商品分类筛选（可选，已废弃，保留兼容）：GIFT/FIREWORK/FIRECRACKER/COMBO/OTHER
+     * @param minPrice   最低价格筛选（可选）
+     * @param maxPrice   最高价格筛选（可选）
+     * @param keyword    搜索关键词（可选）：模糊匹配商品名称
      * @return 分页商品列表
      */
     @GetMapping
@@ -44,13 +45,14 @@ public class ProductPublicController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) Integer minPrice,
             @RequestParam(required = false) Integer maxPrice,
             @RequestParam(required = false) String keyword) {
-        log.debug("获取公开商品列表: category={}, minPrice={}, maxPrice={}, keyword={}, sort={}, page={}, size={}",
-                category, minPrice, maxPrice, keyword, sort, page, size);
-        return Result.success(productService.getPublicProductList(page, size, sort, category, minPrice, maxPrice, keyword));
+        log.debug("获取公开商品列表: categoryId={}, category={}, minPrice={}, maxPrice={}, keyword={}, sort={}, page={}, size={}",
+                categoryId, category, minPrice, maxPrice, keyword, sort, page, size);
+        return Result.success(productService.getPublicProductList(page, size, sort, categoryId, category, minPrice, maxPrice, keyword));
     }
 
     /**

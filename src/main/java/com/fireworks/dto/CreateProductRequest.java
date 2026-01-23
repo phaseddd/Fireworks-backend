@@ -1,7 +1,6 @@
 package com.fireworks.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -30,13 +29,16 @@ public class CreateProductRequest {
     private BigDecimal price;
 
     /**
-     * 商品分类: GIFT-礼花类, FIREWORK-烟花类, FIRECRACKER-鞭炮类, COMBO-组合类, OTHER-其他
+     * 商品分类名称
+     * @deprecated 已废弃，使用 categoryId 替代。保留字段仅用于数据兼容。
      */
-    @Pattern(
-            regexp = "^(GIFT|FIREWORK|FIRECRACKER|COMBO|OTHER)$",
-            message = "商品分类不合法"
-    )
-    private String category = "OTHER";
+    @Deprecated
+    private String category;
+
+    /**
+     * 分类ID（关联 category 表，推荐使用）
+     */
+    private Long categoryId;
 
     /**
      * 库存数量（默认0）

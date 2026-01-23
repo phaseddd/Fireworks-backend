@@ -6,8 +6,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fireworks.dto.CreateProductRequest;
 import com.fireworks.dto.UpdateProductRequest;
+import com.fireworks.entity.Category;
 import com.fireworks.entity.Product;
 import com.fireworks.exception.BusinessException;
+import com.fireworks.mapper.CategoryMapper;
 import com.fireworks.mapper.ProductMapper;
 import com.fireworks.service.ProductVideoExtractAsyncService;
 import com.fireworks.service.ProductService;
@@ -24,6 +26,8 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +51,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
+    private final CategoryMapper categoryMapper;
     private final ProductVideoExtractAsyncService productVideoExtractAsyncService;
 
     /** 公开商品状态：上架 */
@@ -75,7 +80,15 @@ public class ProductServiceImpl implements ProductService {
         Product product = new Product();
         product.setName(request.getName().trim());
         product.setPrice(request.getPrice());
-        product.setCategory(request.getCategory() != null ? request.getCategory() : "OTHER");
+        // 设置分类ID，并同步设置分类名称到 category 字段（兼容旧代码）
+        if (request.getCategoryId() != null) {
+            product.setCategoryId(request.getCategoryId());
+            // 查询分类名称，同步到 category 字段
+            Category cat = categoryMapper.selectById(request.getCategoryId());
+            if (cat != null) {
+                product.setCategory(cat.getName());
+            }
+        }
         product.setStock(request.getStock() != null ? request.getStock() : 0);
         product.setDescription(request.getDescription() != null ? request.getDescription().trim() : "");
         product.setStatus(DEFAULT_STATUS);
@@ -105,6 +118,9 @@ public class ProductServiceImpl implements ProductService {
 
         // 事务提交后异步触发视频提取（resetVideoUrl=false：新建商品无需重置）
         runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, false));
+
+        // 填充分类名称（便于前端直接展示）
+        fillCategoryNames(List.of(product));
         return ProductVO.fromEntity(product);
     }
 
@@ -159,7 +175,15 @@ public class ProductServiceImpl implements ProductService {
         // Update product fields
         product.setName(request.getName().trim());
         product.setPrice(request.getPrice());
-        product.setCategory(request.getCategory() != null ? request.getCategory() : product.getCategory());
+        // 设置分类ID，并同步设置分类名称到 category 字段（兼容旧代码）
+        if (request.getCategoryId() != null) {
+            product.setCategoryId(request.getCategoryId());
+            // 查询分类名称，同步到 category 字段
+            Category cat = categoryMapper.selectById(request.getCategoryId());
+            if (cat != null) {
+                product.setCategory(cat.getName());
+            }
+        }
         product.setStock(request.getStock() != null ? request.getStock() : product.getStock());
         product.setDescription(request.getDescription() != null ? request.getDescription().trim() : product.getDescription());
         product.setStatus(request.getStatus() != null ? request.getStatus() : product.getStatus());
@@ -177,6 +201,9 @@ public class ProductServiceImpl implements ProductService {
         if (qrcodeChanged) {
             runAfterCommit(() -> productVideoExtractAsyncService.extractAndUpdate(product.getId(), qrcodeImage, true));
         }
+
+        // 填充分类名称（便于前端直接展示）
+        fillCategoryNames(List.of(product));
         return ProductVO.fromEntity(product);
     }
 
@@ -241,7 +268,10 @@ public class ProductServiceImpl implements ProductService {
         );
 
         // 转换为VO
-        List<ProductVO> productVOList = productPage.getRecords().stream()
+        List<Product> products = productPage.getRecords();
+        fillCategoryNames(products);
+
+        List<ProductVO> productVOList = products.stream()
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
@@ -256,22 +286,24 @@ public class ProductServiceImpl implements ProductService {
      * <p>
      * 仅返回状态为"上架"的商品，支持多维度筛选：
      * <ul>
-     *   <li>分类筛选</li>
+     *   <li>分类ID筛选（推荐使用）</li>
+     *   <li>分类筛选（已废弃，保留兼容）</li>
      *   <li>价格区间筛选</li>
      *   <li>关键词模糊搜索（按商品名称）</li>
      * </ul>
      *
-     * @param page     页码（从1开始）
-     * @param size     每页数量
-     * @param sort     排序方式
-     * @param category 分类筛选（可选）
-     * @param minPrice 最低价格（可选）
-     * @param maxPrice 最高价格（可选）
-     * @param keyword  搜索关键词（可选）
+     * @param page       页码（从1开始）
+     * @param size       每页数量
+     * @param sort       排序方式
+     * @param categoryId 分类ID筛选（可选，推荐使用）
+     * @param category   分类筛选（可选，已废弃）
+     * @param minPrice   最低价格（可选）
+     * @param maxPrice   最高价格（可选）
+     * @param keyword    搜索关键词（可选）
      * @return 商品分页列表
      */
     @Override
-    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, String category, Integer minPrice, Integer maxPrice, String keyword) {
+    public PageVO<ProductVO> getPublicProductList(Integer page, Integer size, String sort, Long categoryId, String category, Integer minPrice, Integer maxPrice, String keyword) {
         if (page == null || page < 1) {
             page = 1;
         }
@@ -282,8 +314,11 @@ public class ProductServiceImpl implements ProductService {
         LambdaQueryWrapper<Product> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Product::getStatus, PUBLIC_PRODUCT_STATUS);
 
-        // 分类筛选
-        if (StringUtils.hasText(category)) {
+        // 分类ID筛选（优先使用 categoryId）
+        if (categoryId != null) {
+            queryWrapper.eq(Product::getCategoryId, categoryId);
+        } else if (StringUtils.hasText(category)) {
+            // 兼容旧的 category 字符串筛选
             queryWrapper.eq(Product::getCategory, category);
         }
 
@@ -304,12 +339,15 @@ public class ProductServiceImpl implements ProductService {
 
         IPage<Product> productPage = productMapper.selectPage(new Page<>(page, size), queryWrapper);
 
-        List<ProductVO> productVOList = productPage.getRecords().stream()
+        List<Product> products = productPage.getRecords();
+        fillCategoryNames(products);
+
+        List<ProductVO> productVOList = products.stream()
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
-        log.debug("查询公开商品列表: category={}, minPrice={}, maxPrice={}, keyword={}, page={}, size={}, total={}",
-                category, minPrice, maxPrice, keyword, page, size, productPage.getTotal());
+        log.debug("查询公开商品列表: categoryId={}, category={}, minPrice={}, maxPrice={}, keyword={}, page={}, size={}, total={}",
+                categoryId, category, minPrice, maxPrice, keyword, page, size, productPage.getTotal());
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
     }
 
@@ -356,6 +394,43 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /**
+     * 批量填充分类名称（避免前端在兼容期只能显示旧的 category 枚举）
+     *
+     * @param products 商品列表（可为空）
+     */
+    private void fillCategoryNames(List<Product> products) {
+        if (products == null || products.isEmpty()) {
+            return;
+        }
+
+        List<Long> categoryIds = products.stream()
+                .map(Product::getCategoryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (categoryIds.isEmpty()) {
+            return;
+        }
+
+        List<Category> categories = categoryMapper.selectBatchIds(categoryIds);
+        if (categories == null || categories.isEmpty()) {
+            return;
+        }
+
+        Map<Long, String> categoryNameById = categories.stream()
+                .filter(category -> category.getId() != null)
+                .collect(Collectors.toMap(Category::getId, Category::getName, (a, b) -> a));
+
+        for (Product product : products) {
+            Long categoryId = product.getCategoryId();
+            if (categoryId == null) {
+                continue;
+            }
+            product.setCategoryName(categoryNameById.get(categoryId));
+        }
+    }
+
+    /**
      * 根据ID获取商品详情（管理端）
      *
      * @param id 商品ID
@@ -368,7 +443,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "商品ID不能为空");
         }
 
-        Product product = productMapper.selectById(id);
+        Product product = productMapper.selectByIdWithCategory(id);
         if (product == null) {
             throw new BusinessException(404, "商品不存在");
         }
@@ -391,7 +466,7 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException(400, "商品ID不能为空");
         }
 
-        Product product = productMapper.selectById(id);
+        Product product = productMapper.selectByIdWithCategory(id);
         if (product == null || !PUBLIC_PRODUCT_STATUS.equals(product.getStatus())) {
             throw new BusinessException(404, "商品不存在");
         }
@@ -464,6 +539,6 @@ public class ProductServiceImpl implements ProductService {
         }
 
         log.info("商品视频提取信息更新成功: id={}, status={}, targetUrl={}, videoUrl={}", id, status, targetUrl, videoUrl);
-        return ProductVO.fromEntity(productMapper.selectById(id));
+        return ProductVO.fromEntity(productMapper.selectByIdWithCategory(id));
     }
 }

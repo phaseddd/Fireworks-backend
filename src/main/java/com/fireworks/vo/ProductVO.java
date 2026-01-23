@@ -36,8 +36,20 @@ public class ProductVO {
 
     /**
      * 商品分类
+     * @deprecated 已迁移到 categoryId/categoryName
      */
+    @Deprecated
     private String category;
+
+    /**
+     * 分类ID
+     */
+    private Long categoryId;
+
+    /**
+     * 分类名称
+     */
+    private String categoryName;
 
     /**
      * 商品描述
@@ -101,6 +113,8 @@ public class ProductVO {
                 .name(product.getName())
                 .price(product.getPrice())
                 .category(product.getCategory())
+                .categoryId(product.getCategoryId())
+                .categoryName(product.getCategoryName())
                 .description(product.getDescription())
                 .stock(product.getStock())
                 .status(product.getStatus())

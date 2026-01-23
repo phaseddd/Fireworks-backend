@@ -33,8 +33,21 @@ public class Product {
 
     /**
      * 商品分类: GIFT-礼花类, FIREWORK-烟花类, FIRECRACKER-鞭炮类, COMBO-组合类, OTHER-其他
+     * @deprecated 已迁移到 categoryId，保留用于数据迁移兼容
      */
+    @Deprecated
     private String category;
+
+    /**
+     * 分类ID（关联 category 表）
+     */
+    private Long categoryId;
+
+    /**
+     * 分类名称（非表字段，联查时填充）
+     */
+    @TableField(exist = false)
+    private String categoryName;
 
     /**
      * 商品描述

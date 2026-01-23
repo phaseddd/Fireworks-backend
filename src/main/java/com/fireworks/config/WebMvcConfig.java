@@ -36,6 +36,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 // 拦截管理端 API
                 .addPathPatterns("/api/v1/admin/**")
                 .addPathPatterns("/api/v1/products/**")
+                .addPathPatterns("/api/v1/categories/**")
                 .addPathPatterns("/api/v1/agents/**")
                 .addPathPatterns("/api/v1/inquiries/**")
                 .addPathPatterns("/api/v1/upload/**")
@@ -44,7 +45,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/api/health")
                 .excludePathPatterns("/api/")
                 // 排除客户端公开接口（商品浏览）
-                .excludePathPatterns("/api/v1/products/public/**");
+                .excludePathPatterns("/api/v1/products/public/**")
+                // 排除客户端公开接口（分类列表）
+                .excludePathPatterns("/api/v1/categories/active");
     }
 
     @Override
