@@ -226,16 +226,17 @@ public class ProductServiceImpl implements ProductService {
     /**
      * 获取商品列表（管理端）
      * <p>
-     * 支持按状态筛选和排序，返回分页结果。
+     * 支持按状态筛选、关键词搜索和排序，返回分页结果。
      *
-     * @param status 商品状态筛选（可选）
-     * @param sort   排序方式，格式："字段名,asc/desc"（可选，默认按创建时间倒序）
-     * @param page   页码（从1开始）
-     * @param size   每页数量
+     * @param status  商品状态筛选（可选）
+     * @param keyword 搜索关键词（可选）：模糊匹配商品名称
+     * @param sort    排序方式，格式："字段名,asc/desc"（可选，默认按创建时间倒序）
+     * @param page    页码（从1开始）
+     * @param size    每页数量
      * @return 商品分页列表
      */
     @Override
-    public PageVO<ProductVO> getProductList(String status, String sort, Integer page, Integer size) {
+    public PageVO<ProductVO> getProductList(String status, String keyword, String sort, Integer page, Integer size) {
         // 参数校验和默认值
         if (page == null || page < 1) {
             page = 1;
@@ -250,6 +251,11 @@ public class ProductServiceImpl implements ProductService {
         // 状态筛选
         if (StringUtils.hasText(status)) {
             queryWrapper.eq(Product::getStatus, status);
+        }
+
+        // 关键词模糊搜索（按名称）
+        if (StringUtils.hasText(keyword)) {
+            queryWrapper.like(Product::getName, keyword.trim());
         }
 
         // 排序（默认按创建时间倒序）
@@ -268,8 +274,8 @@ public class ProductServiceImpl implements ProductService {
                 .map(ProductVO::fromEntity)
                 .collect(Collectors.toList());
 
-        log.debug("查询商品列表: status={}, page={}, size={}, total={}",
-                status, page, size, productPage.getTotal());
+        log.debug("查询商品列表: status={}, keyword={}, sort={}, page={}, size={}, total={}",
+                status, keyword, sort, page, size, productPage.getTotal());
 
         return PageVO.of(productVOList, productPage.getTotal(), page, size);
     }

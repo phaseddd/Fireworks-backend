@@ -42,20 +42,22 @@ public class ProductController {
     /**
      * 获取商品列表（管理端，需要认证）
      *
-     * @param status 商品状态筛选（可选）：ON_SHELF-上架, OFF_SHELF-下架
-     * @param page   页码（从1开始，默认1）
-     * @param size   每页数量（默认20）
+     * @param status  商品状态筛选（可选）：ON_SHELF-上架, OFF_SHELF-下架
+     * @param keyword 搜索关键词（可选）：模糊匹配商品名称
+     * @param page    页码（从1开始，默认1）
+     * @param size    每页数量（默认20）
      * @return 分页商品列表
      */
     @GetMapping
     public Result<PageVO<ProductVO>> getProductList(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
 
-        log.debug("获取商品列表: status={}, sort={}, page={}, size={}", status, sort, page, size);
-        PageVO<ProductVO> pageVO = productService.getProductList(status, sort, page, size);
+        log.debug("获取商品列表: status={}, keyword={}, sort={}, page={}, size={}", status, keyword, sort, page, size);
+        PageVO<ProductVO> pageVO = productService.getProductList(status, keyword, sort, page, size);
         return Result.success(pageVO);
     }
 
