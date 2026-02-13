@@ -49,6 +49,7 @@ public class WechatCloudServiceImpl implements WechatCloudService {
         Map<String, Object> params = new HashMap<>();
         params.put("scene", scene);
         params.put("page", page);
+        params.put("check_path", false);
         params.put("env_version", normalizeEnvVersion(envVersion));
         params.put("width", 430);
         params.put("auto_color", false);
